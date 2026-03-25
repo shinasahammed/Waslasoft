@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:waslasoft/models/purchase_model.dart';
+import 'package:waslasoft/services/purchase_service.dart';
 
 class ListProductScreen extends StatefulWidget {
   const ListProductScreen({super.key});
@@ -18,31 +20,33 @@ class _ListProductScreenState extends State<ListProductScreen> {
   final Color _primaryBlue = const Color(0xFF1F3A5F);
 
   final Color _accentColor = const Color(0xFF3B82F6);
-
-  final List<Map<String, dynamic>> _products = [
-    {"id": "2711", "name": "ANANDU_HP", "stock": 11.00},
-    {"id": "2713", "name": "ANANDU_Iphone", "stock": 11.00},
-    {"id": "2724", "name": "Akshay_SHAWAYA", "stock": 17.00},
-    {"id": "2727", "name": "CARDAMOM", "stock": 0.00},
-    {"id": "2723", "name": "HP VICTUS AKSHAY", "stock": 100.00},
-    {"id": "2704", "name": "MS_Azure", "stock": 8.00},
-    {"id": "2705", "name": "MS_Azure11", "stock": 8.00},
-    {"id": "2707", "name": "MS_Azure13", "stock": 8.00},
-    {"id": "2703", "name": "MS_POWERBI", "stock": 8.00},
-    {"id": "2708", "name": "NOTHING 2A", "stock": 14.00},
-    {"id": "2709", "name": "NOTHING A2", "stock": 14.00},
-    {"id": "2710", "name": "NOTHING phone", "stock": 14.00},
-    {"id": "2720", "name": "NOTHING426", "stock": 1000.00},
-    {"id": "2725", "name": "PEPPER", "stock": 0.00},
-    {"id": "2729", "name": "TEST10023", "stock": 10.00},
-    {"id": "2784", "name": "WATERMELON T I", "stock": -1020.0},
-    {"id": "2728", "name": "X200", "stock": 14.00},
-  ];
+  List<Purchasemodel> tasKitem = [];
+  bool isLoading = false;
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    fetchTask();
+  }
+
+  Future<void> fetchTask() async {
+    setState(() => isLoading = true);
+
+    try {
+      tasKitem = await PurchaseService().fetchData();
+    } catch (e) {
+      debugPrint(e.toString());
+      if (mounted) {
+        showMessage("Server Error");
+      }
+    }
+
+    setState(() => isLoading = false);
+  }
+
+  void showMessage(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   void _onScroll() {
@@ -337,98 +341,115 @@ class _ListProductScreenState extends State<ListProductScreen> {
                   bottom: Radius.circular(16),
                 ),
               ),
-              child: Column(
-                children: List.generate(_products.length, (index) {
-                  final product = _products[index];
-                  final isLowStock = product['stock'] <= 5;
-                  final isNegative = product['stock'] < 0;
+              child: isLoading
+                  ? const Padding(
+                      padding: EdgeInsets.all(50),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  : tasKitem.isEmpty
+                  ? const Padding(
+                      padding: EdgeInsets.all(50),
+                      child: Center(child: Text("No products found")),
+                    )
+                  : Column(
+                      children: List.generate(tasKitem.length, (index) {
+                        final product = tasKitem[index];
+                        final double stock =
+                            double.tryParse(product.currentStock.toString()) ??
+                            0.0;
+                        final isLowStock = stock <= 5;
+                        final isNegative = stock < 0;
 
-                  return Column(
-                    children: [
-                      if (index > 0)
-                        const Divider(
-                          height: 2,
-                          indent: 16,
-                          endIndent: 16,
-                          color: Color(0xFFF1F5F9),
-                        ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 14,
-                        ),
-                        child: Row(
+                        return Column(
                           children: [
-                            SizedBox(
-                              width: 30,
-                              child: Text(
-                                "${index + 1}",
-                                style: TextStyle(
-                                  color: Colors.grey[400],
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                            if (index > 0)
+                              const Divider(
+                                height: 2,
+                                indent: 16,
+                                endIndent: 16,
+                                color: Color(0xFFF1F5F9),
                               ),
-                            ),
-                            Expanded(
-                              flex: 3,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
+                              child: Row(
                                 children: [
-                                  Row(
-                                    children: [
-                                      Text(
-                                        product['id'],
-                                        style: TextStyle(
-                                          color: _accentColor,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w700,
-                                          decoration: TextDecoration.underline,
-                                          decorationColor: _accentColor
-                                              .withValues(alpha: 0.3),
-                                        ),
+                                  SizedBox(
+                                    width: 30,
+                                    child: Text(
+                                      "${index + 1}",
+                                      style: TextStyle(
+                                        color: Colors.grey[400],
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
                                       ),
-                                      const SizedBox(width: 20),
-                                      Expanded(
-                                        child: Text(
-                                          product['name'],
-                                          style: TextStyle(
-                                            color: _primaryBlue,
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.w700,
-                                            letterSpacing: 0.2,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  Expanded(
+                                    flex: 3,
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Text(
+                                              product.id.toString(),
+                                              style: TextStyle(
+                                                color: _accentColor,
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w700,
+                                                decoration:
+                                                    TextDecoration.underline,
+                                                decorationColor: _accentColor
+                                                    .withValues(alpha: 0.3),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 20),
+                                            Expanded(
+                                              child: Text(
+                                                product.itemName.isNotEmpty
+                                                    ? product.itemName
+                                                    : "No Name",
+                                                style: TextStyle(
+                                                  color: _primaryBlue,
+                                                  fontSize: 15,
+                                                  fontWeight: FontWeight.w700,
+                                                  letterSpacing: 0.2,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
                                         ),
+                                      ],
+                                    ),
+                                  ),
+                                  SizedBox(
+                                    width: 80,
+                                    child: Text(
+                                      stock.toStringAsFixed(2),
+                                      textAlign: TextAlign.right,
+                                      style: TextStyle(
+                                        color: isNegative
+                                            ? Colors.redAccent
+                                            : (isLowStock
+                                                  ? Colors.orange
+                                                  : Colors.green[600]),
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w800,
                                       ),
-                                    ],
+                                    ),
                                   ),
                                 ],
                               ),
                             ),
-                            SizedBox(
-                              width: 80,
-                              child: Text(
-                                product['stock'].toStringAsFixed(2),
-                                textAlign: TextAlign.right,
-                                style: TextStyle(
-                                  color: isNegative
-                                      ? Colors.redAccent
-                                      : (isLowStock
-                                            ? Colors.orange
-                                            : Colors.green[600]),
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
                           ],
-                        ),
-                      ),
-                    ],
-                  );
-                }),
-              ),
+                        );
+                      }),
+                    ),
             ),
           ],
         ),

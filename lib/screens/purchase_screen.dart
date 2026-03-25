@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:waslasoft/models/purchase_model.dart';
+import 'package:waslasoft/services/purchase_service.dart';
 import '../widgets/select_party_dialog.dart';
 import 'printoption_screen.dart';
 
@@ -14,7 +16,8 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
     1.0,
   );
   final ScrollController _scrollController = ScrollController();
-
+  List<Purchasemodel> tasKitem = [];
+  bool isLoading = false;
   String _selectedCategory = "All";
   String _selectedParty = "Select Party";
   bool _isSearchVisible = false;
@@ -31,6 +34,23 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    fetchTask();
+  }
+
+  Future<void> fetchTask() async {
+    setState(() => isLoading = true);
+
+    try {
+      tasKitem = await PurchaseService().fetchData();
+    } catch (e) {
+      debugPrint(e.toString());
+    }
+
+    setState(() => isLoading = false);
+  }
+
+  void showMessage(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   void _onScroll() {
@@ -417,24 +437,37 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
             // Product Grid Placeholder
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: GridView.builder(
-                padding: EdgeInsets.only(top: 15),
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  childAspectRatio: 0.65,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                ),
-                itemCount: 6,
-                itemBuilder: (context, index) {
-                  return ProductCardWidget(
-                    name: "Product ${index + 1}",
-                    price: "₹${(index + 1) * 150}.00",
-                  );
-                },
-              ),
+              child: isLoading
+                  ? Padding(
+                      padding: const EdgeInsets.only(top: 100),
+                      child: CircularProgressIndicator(),
+                    )
+                  : tasKitem.isEmpty
+                  ? Padding(
+                      padding: const EdgeInsets.only(top: 100),
+                      child: Text("No products found"),
+                    )
+                  : GridView.builder(
+                      padding: EdgeInsets.only(top: 15),
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            childAspectRatio: 0.65,
+                            mainAxisSpacing: 12,
+                            crossAxisSpacing: 12,
+                          ),
+                      itemCount: tasKitem.length,
+                      itemBuilder: (context, index) {
+                        final item = tasKitem[index];
+                        return ProductCardWidget(
+                          name: item.itemName,
+                          price: item.salePrice,
+                          stock: item.currentStock.toString(),
+                        );
+                      },
+                    ),
             ),
 
             const SizedBox(height: 100),
@@ -698,15 +731,21 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
 class ProductCardWidget extends StatefulWidget {
   final String name;
   final String price;
+  final String stock;
 
-  const ProductCardWidget({super.key, required this.name, required this.price});
+  const ProductCardWidget({
+    super.key,
+    required this.name,
+    required this.price,
+    required this.stock,
+  });
 
   @override
   State<ProductCardWidget> createState() => _ProductCardWidgetState();
 }
 
 class _ProductCardWidgetState extends State<ProductCardWidget> {
-  int quantity = 1;
+  int quantity = 0;
   bool isPcs = true;
 
   void _toggleUnit() {
@@ -785,19 +824,19 @@ class _ProductCardWidgetState extends State<ProductCardWidget> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Text(
-                          widget.name,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
+                      Text(
+                        widget.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
                         ),
                       ),
+                      const SizedBox(height: 4),
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
@@ -808,7 +847,7 @@ class _ProductCardWidgetState extends State<ProductCardWidget> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          "Stock: 25",
+                          "Stock: ${widget.stock}",
                           style: const TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
