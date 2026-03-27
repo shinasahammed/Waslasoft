@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'settings_screen.dart';
+import '../services/app_config.dart';
 
 class Homeepage extends StatefulWidget {
   const Homeepage({super.key});
@@ -9,7 +10,7 @@ class Homeepage extends StatefulWidget {
 }
 
 class _HomeepageState extends State<Homeepage> {
-  bool isOnline = false;
+  bool isOnline = AppConfig.isTaxEnabled;
   bool showPopup = false;
 
   final ScrollController _scrollController = ScrollController();
@@ -128,6 +129,7 @@ class _HomeepageState extends State<Homeepage> {
                   onChanged: (value) {
                     setState(() {
                       isOnline = value;
+                      AppConfig.isTaxEnabled = value;
                     });
                   },
                 ),

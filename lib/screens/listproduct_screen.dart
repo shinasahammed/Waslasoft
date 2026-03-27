@@ -38,7 +38,7 @@ class _ListProductScreenState extends State<ListProductScreen> {
     } catch (e) {
       debugPrint(e.toString());
       if (mounted) {
-        showMessage("Server Error");
+        showMessage("network Error");
       }
     }
 

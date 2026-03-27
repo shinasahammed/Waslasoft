@@ -1,16 +1,15 @@
 import 'dart:convert';
+
 import 'package:http/http.dart' as http;
-import 'package:waslasoft/models/purchase_model.dart';
-import 'product_auth_service.dart';
+import 'package:waslasoft/models/sales_data_model.dart';
+import 'package:waslasoft/services/sales_auth_service.dart';
 
-class PurchaseService {
-  final Uri uri = Uri.https(
-    "vansales.waslasoft.com",
-    "/api/v1/products_data/",
-    {"client_code": "2029"},
-  );
+class SalesDataService {
+  final Uri uri = Uri.https("vansales.waslasoft.com", "/api/v1/sales_data/", {
+    "client_code": "1999",
+  });
 
-  Future<List<Purchasemodel>> fetchData() async {
+  Future<List<SaleItem>> fetchData() async {
     try {
       final response = await http.get(uri, headers: AuthService.headers);
 
@@ -22,13 +21,18 @@ class PurchaseService {
 
         // if API returns list directly
         if (decoded is List) {
-          return decoded.map((e) => Purchasemodel.fromJson(e)).toList();
+          return decoded.map((e) => SaleItem.fromJson(e)).toList();
         }
 
         // if API returns wrapped response (common case)
         if (decoded is Map && decoded.containsKey('data')) {
-          return (decoded['data'] as List)
-              .map((e) => Purchasemodel.fromJson(e))
+          final List<Datum> datums = (decoded['data'] as List)
+              .map((e) => Datum.fromJson(e))
+              .toList();
+          
+          // Filter out orders without items and flatten all saleItems into a single list
+          return datums
+              .expand((datum) => datum.saleItems ?? <SaleItem>[])
               .toList();
         }
 
