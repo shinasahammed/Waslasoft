@@ -3,6 +3,7 @@ import 'package:waslasoft/screens/addproduct_screen.dart';
 import 'package:waslasoft/screens/homepage_Screen.dart';
 import 'package:waslasoft/screens/listproduct_screen.dart';
 import 'package:waslasoft/screens/paymentsign_screen.dart';
+import 'package:waslasoft/screens/purchase_return_screen.dart';
 import 'package:waslasoft/screens/purchase_screen.dart';
 import 'package:waslasoft/screens/reports/item_wise_sale_report_screen.dart';
 import 'package:waslasoft/screens/reports/purchase_return_report_screen.dart';
@@ -19,6 +20,7 @@ import 'package:waslasoft/screens/reports/outstanding_balance_report_screen.dart
 import 'package:waslasoft/screens/reports/stock_report_screen.dart';
 import 'package:waslasoft/screens/reports/tax_summary_report_screen.dart';
 import 'package:waslasoft/screens/reports/auditing_report_screen.dart';
+import 'package:waslasoft/screens/sales_return_screen.dart';
 import 'package:waslasoft/screens/salesb2b_screen.dart';
 import 'package:waslasoft/screens/settings_screen.dart';
 import 'package:waslasoft/screens/admin_panel_screen.dart';
@@ -49,7 +51,9 @@ class MainApp extends StatelessWidget {
         '/settings': (_) => const SettingsScreen(),
         '/adminpanel': (_) => const AdminPanelScreen(),
         '/salesB2B': (_) => const Salesscreen(),
+        '/salesReturn': (_) => const Salesreturnscreen(),
         '/purchase': (_) => const PurchaseScreen(),
+        '/purchasereturn': (_) => const PurchaseReturnScreen(),
         '/addproduct': (_) => const AddProductScreen(),
         '/listproduct': (_) => const ListProductScreen(),
         '/paymentsign': (_) => const PaymentsignScreen(),

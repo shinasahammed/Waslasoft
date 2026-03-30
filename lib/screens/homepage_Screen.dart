@@ -190,6 +190,9 @@ class _HomeepageState extends State<Homeepage> {
                         _FeatureItem(
                           icon: Icons.assignment_return,
                           label: "Sales Return",
+                          onTap: () {
+                            Navigator.pushNamed(context, '/salesReturn');
+                          },
                         ),
                         _DividerLine(),
                         _FeatureItem(
@@ -335,9 +338,12 @@ class _HomeepageState extends State<Homeepage> {
                           label: "Hold Items",
                         ),
                         const _DividerLine(),
-                        const _FeatureItem(
+                        _FeatureItem(
                           icon: Icons.assignment_return,
                           label: "Purchase Return",
+                          onTap: () {
+                            Navigator.pushNamed(context, '/purchasereturn');
+                          },
                         ),
                       ],
                     ),

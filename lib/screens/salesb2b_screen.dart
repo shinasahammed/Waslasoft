@@ -484,32 +484,43 @@ class _SalesscreenState extends State<Salesscreen> {
             // Product Grid Placeholder
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: GridView.builder(
-                padding: EdgeInsets.only(top: 15),
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  childAspectRatio: 0.65,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                ),
-                itemCount: tasKitem.length,
-                itemBuilder: (context, index) {
-                  final item = tasKitem[index];
-                  return ProductCardWidget(
-                    name: item.product ?? "Unnamed Product",
-                    price: "₹${item.price ?? '0'}",
-                    stock: item.qty ?? "0",
-                    taxPercentage: item.taxPercentage ?? "0",
-                    taxAmount: item.taxAmount ?? "0",
-                    initialQuantity:
-                        _cartQuantities[item.itemId ?? item.id] ?? 0,
-                    onQuantityChanged: (newQty) =>
-                        _updateQuantity(item, newQty),
-                  );
-                },
-              ),
+              child: isLoading
+                  ? Padding(
+                      padding: const EdgeInsets.only(top: 100),
+                      child: CircularProgressIndicator(),
+                    )
+                  : tasKitem.isEmpty
+                  ? Padding(
+                      padding: const EdgeInsets.only(top: 100),
+                      child: Text("No products found"),
+                    )
+                  : GridView.builder(
+                      padding: EdgeInsets.only(top: 15),
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            childAspectRatio: 0.65,
+                            mainAxisSpacing: 12,
+                            crossAxisSpacing: 12,
+                          ),
+                      itemCount: tasKitem.length,
+                      itemBuilder: (context, index) {
+                        final item = tasKitem[index];
+                        return ProductCardWidget(
+                          name: item.product ?? "Unnamed Product",
+                          price: "₹${item.price ?? '0'}",
+                          stock: item.qty ?? "0",
+                          taxPercentage: item.taxPercentage ?? "0",
+                          taxAmount: item.taxAmount ?? "0",
+                          initialQuantity:
+                              _cartQuantities[item.itemId ?? item.id] ?? 0,
+                          onQuantityChanged: (newQty) =>
+                              _updateQuantity(item, newQty),
+                        );
+                      },
+                    ),
             ),
 
             const SizedBox(height: 100),
@@ -768,19 +779,19 @@ class _ProductCardWidgetState extends State<ProductCardWidget> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Text(
-                          widget.name,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
+                      Text(
+                        widget.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
                         ),
                       ),
+                      const SizedBox(height: 4),
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,

@@ -1,22 +1,23 @@
 import 'package:flutter/material.dart';
-import 'package:waslasoft/models/sales_return_model.dart';
-import 'package:waslasoft/services/sales_return_service.dart';
+import 'package:waslasoft/models/purchase_return_model.dart';
+import 'package:waslasoft/services/purchase_return_service.dart';
+
 import '../services/app_config.dart';
 import '../widgets/select_party_dialog.dart';
 
-class Salesreturnscreen extends StatefulWidget {
-  const Salesreturnscreen({super.key});
+class PurchaseReturnScreen extends StatefulWidget {
+  const PurchaseReturnScreen({super.key});
 
   @override
-  State<Salesreturnscreen> createState() => _SalesreturnscreenState();
+  State<PurchaseReturnScreen> createState() => _PurchaseReturnScreenState();
 }
 
-class _SalesreturnscreenState extends State<Salesreturnscreen> {
+class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
   final ValueNotifier<double> _appBarOpacityNotifier = ValueNotifier<double>(
     1.0,
   );
   final ScrollController _scrollController = ScrollController();
-  List<SalesReturnItem> tasKitem = [];
+  List<PurchaseReturnItem> tasKitem = [];
   bool isLoading = false;
   String _selectedCategory = "All";
   String _selectedParty = "Select Party";
@@ -41,7 +42,7 @@ class _SalesreturnscreenState extends State<Salesreturnscreen> {
     double total = 0;
     _cartQuantities.forEach((id, qty) {
       try {
-        // SalesReturnItem doesn't have a direct taxAmount per unit in the model provided.
+        // PurchaseReturnItem doesn't have a direct taxAmount per unit in the model provided.
         // If needed, calculate from percentage or use 0.
         // Assuming tax is 0 for now as it's not in the model.
         total += 0;
@@ -55,7 +56,7 @@ class _SalesreturnscreenState extends State<Salesreturnscreen> {
   int get _totalItems =>
       _cartQuantities.values.fold(0, (sum, qty) => sum + qty);
 
-  void _updateQuantity(SalesReturnItem item, int newQuantity) {
+  void _updateQuantity(PurchaseReturnItem item, int newQuantity) {
     final id = item.id;
     if (id == null) return;
     setState(() {
@@ -86,7 +87,7 @@ class _SalesreturnscreenState extends State<Salesreturnscreen> {
     setState(() => isLoading = true);
 
     try {
-      tasKitem = await SalesReturnService().fetchData();
+      tasKitem = await PurchaseReturnService().fetchData();
     } catch (e) {
       debugPrint(e.toString());
     }
@@ -165,7 +166,7 @@ class _SalesreturnscreenState extends State<Salesreturnscreen> {
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 8),
                             child: const Text(
-                              "Sales Return",
+                              "Purchase Return",
                               style: TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,

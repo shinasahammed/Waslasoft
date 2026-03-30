@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:waslasoft/models/purchase_model.dart';
-import 'package:waslasoft/services/purchase_service.dart';
+import 'package:waslasoft/models/purchase_data_model.dart';
+import 'package:waslasoft/services/app_config.dart';
+import 'package:waslasoft/services/purchase_data_service.dart';
+
 import '../widgets/select_party_dialog.dart';
 import 'printoption_screen.dart';
 
@@ -16,11 +18,57 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
     1.0,
   );
   final ScrollController _scrollController = ScrollController();
-  List<Purchasemodel> tasKitem = [];
+  List<PurchaseItem> tasKitem = [];
   bool isLoading = false;
   String _selectedCategory = "All";
   String _selectedParty = "Select Party";
   bool _isSearchVisible = false;
+  final Map<int, int> _cartQuantities = {};
+  double get _totalAmount {
+    double total = 0;
+    _cartQuantities.forEach((itemId, qty) {
+      try {
+        final item = tasKitem.firstWhere(
+          (element) => (element.itemId ?? element.id) == itemId,
+        );
+        total += (double.tryParse(item.price ?? '0') ?? 0) * qty;
+      } catch (e) {
+        debugPrint("Item not found: $itemId");
+      }
+    });
+    return total;
+  }
+
+  double get _totalVat {
+    if (!AppConfig.isTaxEnabled) return 0.0;
+    double total = 0;
+    _cartQuantities.forEach((itemId, qty) {
+      try {
+        final item = tasKitem.firstWhere(
+          (element) => (element.itemId ?? element.id) == itemId,
+        );
+        total += (double.tryParse(item.taxAmount ?? '0') ?? 0) * qty;
+      } catch (e) {
+        debugPrint("Item not found: $itemId");
+      }
+    });
+    return total;
+  }
+
+  int get _totalItems =>
+      _cartQuantities.values.fold(0, (sum, qty) => sum + qty);
+
+  void _updateQuantity(PurchaseItem item, int newQuantity) {
+    final id = item.itemId ?? item.id;
+    if (id == null) return;
+    setState(() {
+      if (newQuantity <= 0) {
+        _cartQuantities.remove(id);
+      } else {
+        _cartQuantities[id] = newQuantity;
+      }
+    });
+  }
 
   final List<String> _categories = [
     "All",
@@ -41,7 +89,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
     setState(() => isLoading = true);
 
     try {
-      tasKitem = await PurchaseService().fetchData();
+      tasKitem = await PurchaseDataService().fetchData();
     } catch (e) {
       debugPrint(e.toString());
     }
@@ -462,9 +510,13 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                       itemBuilder: (context, index) {
                         final item = tasKitem[index];
                         return ProductCardWidget(
-                          name: item.itemName,
-                          price: item.salePrice,
-                          stock: item.currentStock.toString(),
+                          name: item.product ?? "Unknown Product",
+                          price: item.price ?? "0.00",
+                          stock: item.qty.toString(),
+                          initialQuantity:
+                              _cartQuantities[item.itemId ?? item.id] ?? 0,
+                          onQuantityChanged: (newQty) =>
+                              _updateQuantity(item, newQty),
                         );
                       },
                     ),
@@ -648,9 +700,9 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
+            children: [
               Text(
-                "3 Items | ₹1,250.00",
+                "$_totalItems Items | ₹${(_totalAmount + _totalVat).toStringAsFixed(2)}",
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
@@ -659,7 +711,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
               ),
               SizedBox(height: 4),
               Text(
-                "Net: 0.00| VAT: 0.00",
+                "Net: ₹${_totalAmount.toStringAsFixed(2)} | VAT: ₹${_totalVat.toStringAsFixed(2)}",
                 style: TextStyle(
                   color: Colors.white70,
                   fontSize: 12,
@@ -695,7 +747,13 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
               ),
               const SizedBox(height: 10),
               GestureDetector(
-                onTap: () {},
+                onTap: () {
+                  setState(() {
+                    _cartQuantities.clear();
+                    _selectedParty = "Select Party";
+                  });
+                  showMessage("Cart cleared");
+                },
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 20,
@@ -732,12 +790,15 @@ class ProductCardWidget extends StatefulWidget {
   final String name;
   final String price;
   final String stock;
-
+  final int initialQuantity;
+  final Function(int) onQuantityChanged;
   const ProductCardWidget({
     super.key,
     required this.name,
     required this.price,
     required this.stock,
+    required this.initialQuantity,
+    required this.onQuantityChanged,
   });
 
   @override
@@ -745,7 +806,6 @@ class ProductCardWidget extends StatefulWidget {
 }
 
 class _ProductCardWidgetState extends State<ProductCardWidget> {
-  int quantity = 0;
   bool isPcs = true;
 
   void _toggleUnit() {
@@ -755,16 +815,15 @@ class _ProductCardWidgetState extends State<ProductCardWidget> {
   }
 
   void _increment() {
-    setState(() {
-      quantity++;
-    });
+    final maxStock = double.tryParse(widget.stock)?.toInt() ?? 0;
+    if (widget.initialQuantity < maxStock) {
+      widget.onQuantityChanged(widget.initialQuantity + 1);
+    }
   }
 
   void _decrement() {
-    if (quantity > 0) {
-      setState(() {
-        quantity--;
-      });
+    if (widget.initialQuantity > 0) {
+      widget.onQuantityChanged(widget.initialQuantity - 1);
     }
   }
 
@@ -949,7 +1008,7 @@ class _ProductCardWidgetState extends State<ProductCardWidget> {
                       ),
                       const SizedBox(width: 15),
                       Text(
-                        "$quantity",
+                        "${widget.initialQuantity}",
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
