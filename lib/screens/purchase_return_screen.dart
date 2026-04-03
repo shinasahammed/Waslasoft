@@ -1,6 +1,8 @@
+import 'package:custom_refresh_indicator/custom_refresh_indicator.dart';
 import 'package:flutter/material.dart';
 import 'package:waslasoft/models/purchase_return_model.dart';
 import 'package:waslasoft/services/purchase_return_service.dart';
+import 'package:waslasoft/storage/purchase_return_storage.dart';
 
 import '../services/app_config.dart';
 import '../widgets/select_party_dialog.dart';
@@ -84,12 +86,38 @@ class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
   }
 
   Future<void> fetchTask() async {
+    // 1. Try to load from cache first
+    try {
+      final cachedItems = await PurchaseReturnStorage.getPurchaseReturns();
+      if (cachedItems.isNotEmpty) {
+        setState(() {
+          tasKitem = cachedItems;
+          isLoading = false;
+        });
+        // Data found in cache, return early without calling API
+        return;
+      }
+    } catch (e) {
+      debugPrint("Cache Load Error: $e");
+    }
+
+    // 2. Fetch fresh data from API ONLY if cache is empty
     setState(() => isLoading = true);
 
     try {
-      tasKitem = await PurchaseReturnService().fetchData();
+      final freshItems = await PurchaseReturnService().fetchData();
+      if (freshItems.isNotEmpty) {
+        setState(() {
+          tasKitem = freshItems;
+        });
+        // 3. Save to cache for subsequent opens
+        await PurchaseReturnStorage.savePurchaseReturns(freshItems);
+      }
     } catch (e) {
-      debugPrint(e.toString());
+      debugPrint("API Fetch Error: $e");
+      if (tasKitem.isEmpty) {
+        showMessage("Failed to load products. Please check your connection.");
+      }
     }
 
     setState(() => isLoading = false);
@@ -324,195 +352,291 @@ class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
           },
         ),
       ),
-      body: SingleChildScrollView(
-        controller: _scrollController,
-        child: Column(
-          children: [
-            const SizedBox(height: 160),
-
-            if (_isSearchVisible)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: Container(
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.1),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: TextField(
-                    decoration: InputDecoration(
-                      hintText: "Search products...",
-                      hintStyle: TextStyle(
-                        color: Colors.grey[400],
-                        fontSize: 14,
-                      ),
-                      prefixIcon: Icon(
-                        Icons.search,
-                        color: Colors.grey[400],
-                        size: 20,
-                      ),
-                      suffixIcon: GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _isSearchVisible = false;
-                          });
-                        },
-                        child: Icon(
-                          Icons.close,
-                          color: Colors.grey[400],
-                          size: 20,
-                        ),
-                      ),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 13),
-                    ),
-                  ),
-                ),
-              ),
-
-            // Party Details Section
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(15),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: const Color(
-                              0xFF1F3A5F,
-                            ).withValues(alpha: 0.1),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.person,
-                            color: Color(0xFF1F3A5F),
-                            size: 24,
-                          ),
-                        ),
-                        const SizedBox(width: 15),
-                        Expanded(
+      body: CustomRefreshIndicator(
+        onRefresh: () async {
+          await PurchaseReturnStorage.clearCache();
+          await fetchTask();
+        },
+        builder:
+            (
+              BuildContext context,
+              Widget child,
+              IndicatorController controller,
+            ) {
+              return AnimatedBuilder(
+                animation: controller,
+                builder: (context, _) {
+                  final double opacity = controller.value.clamp(0.0, 1.0);
+                  return Stack(
+                    alignment: Alignment.topCenter,
+                    children: <Widget>[
+                      if (!controller.isIdle)
+                        Positioned(
+                          top: 120 + (40.0 * controller.value),
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                _selectedParty == "Select Party"
-                                    ? "Customer Not Selected"
-                                    : _selectedParty,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                  color: Colors.black87,
+                              Opacity(
+                                opacity: opacity,
+                                child: Container(
+                                  height: 45,
+                                  width: 45,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(
+                                          0xFF1F3A5F,
+                                        ).withOpacity(0.2),
+                                        blurRadius: 15,
+                                        offset: const Offset(0, 5),
+                                      ),
+                                    ],
+                                  ),
+                                  padding: const EdgeInsets.all(10),
+                                  child: CircularProgressIndicator(
+                                    value: controller.isLoading
+                                        ? null
+                                        : controller.value,
+                                    strokeWidth: 3,
+                                    valueColor: const AlwaysStoppedAnimation(
+                                      Color(0xFF1F3A5F),
+                                    ),
+                                  ),
                                 ),
                               ),
-                              Text(
-                                _selectedParty == "Select Party"
-                                    ? "Select a party to start billing"
-                                    : "Active Customer",
-                                style: const TextStyle(
-                                  color: Colors.grey,
-                                  fontSize: 12,
+                              const SizedBox(height: 8),
+                              Opacity(
+                                opacity: (opacity - 0.5).clamp(0, 1) * 2,
+                                child: Text(
+                                  controller.isLoading
+                                      ? "Refreshing"
+                                      : (controller.value >= 1.0
+                                            ? "Release to refresh"
+                                            : "Pull down to refresh"),
+                                  style: const TextStyle(
+                                    color: Color(0xFF1F3A5F),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 1.2,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        const Icon(
-                          Icons.arrow_forward_ios,
-                          size: 14,
-                          color: Colors.grey,
+                      Transform.translate(
+                        offset: Offset(0, 100.0 * controller.value),
+                        child: child,
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
+        child: SingleChildScrollView(
+          controller: _scrollController,
+          child: Column(
+            children: [
+              const SizedBox(height: 160),
+
+              if (_isSearchVisible)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: Container(
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
                         ),
                       ],
                     ),
-                    const Divider(height: 24),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _buildMiniInfo(Icons.phone, "No Phone"),
-                        _buildMiniInfo(
-                          Icons.account_balance_wallet,
-                          "Bal: 0.00",
+                    child: TextField(
+                      decoration: InputDecoration(
+                        hintText: "Search products...",
+                        hintStyle: TextStyle(
+                          color: Colors.grey[400],
+                          fontSize: 14,
                         ),
-                        _buildMiniInfo(Icons.history, "Last: N/A"),
-                      ],
+                        prefixIcon: Icon(
+                          Icons.search,
+                          color: Colors.grey[400],
+                          size: 20,
+                        ),
+                        suffixIcon: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _isSearchVisible = false;
+                            });
+                          },
+                          child: Icon(
+                            Icons.close,
+                            color: Colors.grey[400],
+                            size: 20,
+                          ),
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 13,
+                        ),
+                      ),
                     ),
+                  ),
+                ),
+
+              // Party Details Section
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(15),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(
+                                0xFF1F3A5F,
+                              ).withValues(alpha: 0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.person,
+                              color: Color(0xFF1F3A5F),
+                              size: 24,
+                            ),
+                          ),
+                          const SizedBox(width: 15),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _selectedParty == "Select Party"
+                                      ? "Customer Not Selected"
+                                      : _selectedParty,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                                Text(
+                                  _selectedParty == "Select Party"
+                                      ? "Select a party to start billing"
+                                      : "Active Customer",
+                                  style: const TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(
+                            Icons.arrow_forward_ios,
+                            size: 14,
+                            color: Colors.grey,
+                          ),
+                        ],
+                      ),
+                      const Divider(height: 24),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _buildMiniInfo(Icons.phone, "No Phone"),
+                          _buildMiniInfo(
+                            Icons.account_balance_wallet,
+                            "Bal: 0.00",
+                          ),
+                          _buildMiniInfo(Icons.history, "Last: N/A"),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Categories Section
+              SizedBox(
+                height: 40,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  children: [
+                    _buildCategoryItem("ALL PRODUCTS", isSelected: true),
+                    _buildCategoryItem("BEVERAGES"),
+                    _buildCategoryItem("SNACKS"),
+                    _buildCategoryItem("DAIRY"),
+                    _buildCategoryItem("ELECTRONICS"),
                   ],
                 ),
               ),
-            ),
 
-            const SizedBox(height: 20),
-
-            // Categories Section
-            SizedBox(
-              height: 40,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                children: [
-                  _buildCategoryItem("ALL PRODUCTS", isSelected: true),
-                  _buildCategoryItem("BEVERAGES"),
-                  _buildCategoryItem("SNACKS"),
-                  _buildCategoryItem("DAIRY"),
-                  _buildCategoryItem("ELECTRONICS"),
-                ],
+              // Product Grid Placeholder
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: isLoading
+                    ? Padding(
+                        padding: const EdgeInsets.only(top: 100),
+                        child: CircularProgressIndicator(),
+                      )
+                    : tasKitem.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.only(top: 100),
+                        child: Text("No products found"),
+                      )
+                    : GridView.builder(
+                        padding: EdgeInsets.only(top: 15),
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              childAspectRatio: 0.65,
+                              mainAxisSpacing: 12,
+                              crossAxisSpacing: 12,
+                            ),
+                        itemCount: tasKitem.length,
+                        itemBuilder: (context, index) {
+                          final item = tasKitem[index];
+                          return ProductCardWidget(
+                            name: item.product ?? "Unnamed Product",
+                            price: "₹${item.returnAmount ?? '0'}",
+                            stock: item.returnQty ?? "0",
+                            taxPercentage:
+                                "0", // Return items might not have tax per line in the same way
+                            taxAmount: "0",
+                            initialQuantity: _cartQuantities[item.id] ?? 0,
+                            onQuantityChanged: (newQty) =>
+                                _updateQuantity(item, newQty),
+                          );
+                        },
+                      ),
               ),
-            ),
 
-            // Product Grid Placeholder
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: GridView.builder(
-                padding: EdgeInsets.only(top: 15),
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  childAspectRatio: 0.65,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                ),
-                itemCount: tasKitem.length,
-                itemBuilder: (context, index) {
-                  final item = tasKitem[index];
-                  return ProductCardWidget(
-                    name: item.product ?? "Unnamed Product",
-                    price: "₹${item.returnAmount ?? '0'}",
-                    stock: item.returnQty ?? "0",
-                    taxPercentage:
-                        "0", // Return items might not have tax per line in the same way
-                    taxAmount: "0",
-                    initialQuantity: _cartQuantities[item.id] ?? 0,
-                    onQuantityChanged: (newQty) =>
-                        _updateQuantity(item, newQty),
-                  );
-                },
-              ),
-            ),
-
-            const SizedBox(height: 100),
-          ],
+              const SizedBox(height: 100),
+            ],
+          ),
         ),
       ),
       bottomNavigationBar: _buildBottomCartBar(),

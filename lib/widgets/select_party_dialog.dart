@@ -1,7 +1,16 @@
 import 'package:flutter/material.dart';
 
 class SelectPartyDialog extends StatefulWidget {
-  const SelectPartyDialog({super.key});
+  final Future<List<String>>? dataFuture;
+  final String title;
+  final String subTitle;
+
+  const SelectPartyDialog({
+    super.key,
+    this.dataFuture,
+    this.title = "Select Party",
+    this.subTitle = "Choose a customer to proceed",
+  });
 
   @override
   State<SelectPartyDialog> createState() => _SelectPartyDialogState();
@@ -11,9 +20,9 @@ class _SelectPartyDialogState extends State<SelectPartyDialog> {
   final TextEditingController _searchController = TextEditingController();
   final Color _primaryBlue = const Color(0xFF1F3A5F);
 
-  // Mock list of parties
-  final List<String> _allParties = [
-    "ASWIN",
+  bool _isLoading = false;
+  List<String> _allParties = [
+    "AL JAZEERA TRADING CO",
     "ASWINPP",
     "FHFHGG",
     "RAHIM",
@@ -31,6 +40,28 @@ class _SelectPartyDialogState extends State<SelectPartyDialog> {
     super.initState();
     _filteredParties = _allParties;
     _searchController.addListener(_onSearchChanged);
+    if (widget.dataFuture != null) {
+      _loadData();
+    }
+  }
+
+  Future<void> _loadData() async {
+    setState(() {
+      _isLoading = true;
+    });
+    try {
+      final data = await widget.dataFuture!;
+      setState(() {
+        _allParties = data;
+        _filteredParties = data;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      // Handle error if needed
+    }
   }
 
   void _onSearchChanged() {
@@ -90,7 +121,7 @@ class _SelectPartyDialogState extends State<SelectPartyDialog> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    "Select Party",
+                    widget.title,
                     style: TextStyle(
                       fontSize: 26,
                       fontWeight: FontWeight.w900,
@@ -100,7 +131,7 @@ class _SelectPartyDialogState extends State<SelectPartyDialog> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    "Choose a customer to proceed",
+                    widget.subTitle,
                     style: TextStyle(
                       fontSize: 13,
                       color: Colors.grey[500],
@@ -187,8 +218,10 @@ class _SelectPartyDialogState extends State<SelectPartyDialog> {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(24),
-                child: _filteredParties.isEmpty
-                    ? _buildEmptyState()
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _filteredParties.isEmpty
+                        ? _buildEmptyState()
                     : ListView.separated(
                         shrinkWrap: true,
                         itemCount: _filteredParties.length,

@@ -29,7 +29,7 @@ class SalesDataService {
           final List<Datum> datums = (decoded['data'] as List)
               .map((e) => Datum.fromJson(e))
               .toList();
-          
+
           // Filter out orders without items and flatten all saleItems into a single list
           return datums
               .expand((datum) => datum.saleItems ?? <SaleItem>[])

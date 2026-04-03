@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:waslasoft/widgets/select_party_dialog.dart';
+import 'package:waslasoft/services/expense_data_service.dart';
 
 class ExpenseScreen extends StatefulWidget {
   const ExpenseScreen({super.key});
@@ -110,7 +111,11 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                             onTap: () async {
                               final result = await showDialog<String>(
                                 context: context,
-                                builder: (context) => const SelectPartyDialog(),
+                                builder: (context) => SelectPartyDialog(
+                                  dataFuture: ExpenseDataService().fetchNames(),
+                                  title: "Select Expense Account",
+                                  subTitle: "Choose an account for this expense",
+                                ),
                               );
                               if (result != null) {
                                 setState(() {
