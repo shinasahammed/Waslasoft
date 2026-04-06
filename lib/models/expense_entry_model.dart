@@ -53,17 +53,9 @@ class Expenseentrymodel {
     );
 
     Map<String, dynamic> toJson() => {
-        "expense_entry_id": expenseEntryId,
-        "created_by": createdBy,
+        "expense": expense,
         "payment_method": paymentMethod,
-        "client_code": clientCode,
         "amount": amount,
         "narration": narration,
-        "created_at": createdAt?.toIso8601String(),
-        "is_created": isCreated,
-        "is_updated": isUpdated,
-        "is_create_sync": isCreateSync,
-        "is_update_sync": isUpdateSync,
-        "expense": expense,
     };
 }

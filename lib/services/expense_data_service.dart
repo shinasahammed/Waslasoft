@@ -6,7 +6,7 @@ import 'package:waslasoft/services/sales_auth_service.dart';
 class ExpenseDataService {
   final Uri uri = Uri.https(
     "vansales.waslasoft.com",
-    "/api/v1/expense/",
+    "/api/v1/expense_data/",
     {"client_code": "1999"},
   );
 
@@ -47,5 +47,37 @@ class ExpenseDataService {
         .where((e) => e.name != null)
         .map((e) => e.name!)
         .toList();
+  }
+
+  /// Add a new expense party
+  Future<Expensedatamodel?> createParty(String name, String openingBalance) async {
+    try {
+      final body = {
+        "name": name,
+        "open_balance": openingBalance,
+        "typ": "EXPENSE",
+      };
+
+      final response = await http.post(
+        uri,
+        headers: AuthService.headers,
+        body: jsonEncode(body),
+      );
+
+      print("CREATE PARTY STATUS CODE: ${response.statusCode}");
+      print("CREATE PARTY RESPONSE BODY: ${response.body}");
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+         final decoded = jsonDecode(response.body);
+         if (decoded is Map<String, dynamic>) {
+           return Expensedatamodel.fromJson(decoded);
+         }
+         return Expensedatamodel(name: name, openBalance: openingBalance, typ: "EXPENSE");
+      } else {
+        throw Exception("Server Error: ${response.statusCode}");
+      }
+    } catch (e) {
+      throw Exception("Create Party Error: $e");
+    }
   }
 }
