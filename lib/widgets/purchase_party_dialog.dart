@@ -1,27 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:waslasoft/models/expense_data_model.dart';
-import 'package:waslasoft/services/expense_data_service.dart';
+import 'package:waslasoft/services/supplier_data_service.dart';
 
-class SelectexpensePartyDialog extends StatefulWidget {
+class SelectpurchasePartyDialog extends StatefulWidget {
   final Future<List<Expensedatamodel>> Function()? onRefresh;
   final String title;
   final String subTitle;
 
-  const SelectexpensePartyDialog({
+  const SelectpurchasePartyDialog({
     super.key,
     this.onRefresh,
-    this.title = "Select Expense Account",
-    this.subTitle = "Choose an account for this expense",
+    this.title = "Select Purchase Account",
+    this.subTitle = "Choose an account for this purchase",
   });
 
   @override
-  State<SelectexpensePartyDialog> createState() =>
-      _SelectexpensePartyDialogState();
+  State<SelectpurchasePartyDialog> createState() =>
+      _SelectpurchasePartyDialogState();
 }
 
-class _SelectexpensePartyDialogState extends State<SelectexpensePartyDialog> {
+class _SelectpurchasePartyDialogState extends State<SelectpurchasePartyDialog> {
   final TextEditingController _searchController = TextEditingController();
   final Color _primaryBlue = const Color(0xFF1F3A5F);
+  final SupplierDataService _service = SupplierDataService();
 
   bool _isLoading = false;
   List<Expensedatamodel> _allParties = [];
@@ -31,9 +32,7 @@ class _SelectexpensePartyDialogState extends State<SelectexpensePartyDialog> {
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
-    if (widget.onRefresh != null) {
-      _loadData();
-    }
+    _loadData();
   }
 
   Future<void> _showAddAccountDialog() async {
@@ -125,11 +124,10 @@ class _SelectexpensePartyDialogState extends State<SelectexpensePartyDialog> {
                               if (nameController.text.trim().isEmpty) return;
                               setDialogState(() => isSaving = true);
                               try {
-                                  final success = await ExpenseDataService()
-                                      .createParty(
+                                  final success = await SupplierDataService()
+                                      .createSupplier(
                                     name: nameController.text.trim(),
                                     openingBalance: balanceController.text.trim(),
-                                    typ: "EXPENSE",
                                   );
                                 if (success != null && context.mounted) {
                                   Navigator.pop(context, success);
@@ -202,13 +200,11 @@ class _SelectexpensePartyDialogState extends State<SelectexpensePartyDialog> {
     }
 
     try {
-      final data = await widget.onRefresh!();
-      // Filter list to only show parties with type "EXPENSE"
-      final filteredList = data.where((e) => e.typ == "EXPENSE").toList();
+      final data = await _service.fetchData();
       
       setState(() {
-        _allParties = filteredList;
-        _filteredParties = filteredList;
+        _allParties = data;
+        _filteredParties = data;
         _isLoading = false;
       });
     } catch (e) {
@@ -331,7 +327,7 @@ class _SelectexpensePartyDialogState extends State<SelectexpensePartyDialog> {
               controller: _searchController,
               style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
               decoration: InputDecoration(
-                hintText: "Find expense account...",
+                hintText: "Find purchase account...",
                 hintStyle: TextStyle(
                   color: Colors.grey[400],
                   fontSize: 15,

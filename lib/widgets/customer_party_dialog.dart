@@ -2,24 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:waslasoft/models/expense_data_model.dart';
 import 'package:waslasoft/services/expense_data_service.dart';
 
-class SelectexpensePartyDialog extends StatefulWidget {
+class SelectcustomerPartyDialog extends StatefulWidget {
   final Future<List<Expensedatamodel>> Function()? onRefresh;
   final String title;
   final String subTitle;
 
-  const SelectexpensePartyDialog({
+  const SelectcustomerPartyDialog({
     super.key,
     this.onRefresh,
-    this.title = "Select Expense Account",
-    this.subTitle = "Choose an account for this expense",
+    this.title = "Select Customer",
+    this.subTitle = "Choose a customer for this payment",
   });
 
   @override
-  State<SelectexpensePartyDialog> createState() =>
-      _SelectexpensePartyDialogState();
+  State<SelectcustomerPartyDialog> createState() =>
+      _SelectcustomerPartyDialogState();
 }
 
-class _SelectexpensePartyDialogState extends State<SelectexpensePartyDialog> {
+class _SelectcustomerPartyDialogState extends State<SelectcustomerPartyDialog> {
   final TextEditingController _searchController = TextEditingController();
   final Color _primaryBlue = const Color(0xFF1F3A5F);
 
@@ -44,7 +44,7 @@ class _SelectexpensePartyDialogState extends State<SelectexpensePartyDialog> {
     await showGeneralDialog(
       context: context,
       barrierDismissible: true,
-      barrierLabel: "Add Account",
+      barrierLabel: "Add Customer",
       pageBuilder: (context, anim1, anim2) => const SizedBox(),
       transitionBuilder: (context, anim1, anim2, child) {
         return Transform.scale(
@@ -65,12 +65,12 @@ class _SelectexpensePartyDialogState extends State<SelectexpensePartyDialog> {
                           color: _primaryBlue.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Icon(Icons.add_business_rounded,
+                        child: Icon(Icons.person_add_rounded,
                             color: _primaryBlue),
                       ),
                       const SizedBox(width: 12),
                       const Text(
-                        "New Account",
+                        "New Customer",
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -84,7 +84,7 @@ class _SelectexpensePartyDialogState extends State<SelectexpensePartyDialog> {
                       TextField(
                         controller: nameController,
                         decoration: InputDecoration(
-                          labelText: "Account Name",
+                          labelText: "Customer Name",
                           prefixIcon: const Icon(Icons.person_outline),
                           filled: true,
                           fillColor: Colors.grey[100],
@@ -129,7 +129,7 @@ class _SelectexpensePartyDialogState extends State<SelectexpensePartyDialog> {
                                       .createParty(
                                     name: nameController.text.trim(),
                                     openingBalance: balanceController.text.trim(),
-                                    typ: "EXPENSE",
+                                    typ: "CUSTOMER",
                                   );
                                 if (success != null && context.mounted) {
                                   Navigator.pop(context, success);
@@ -138,7 +138,7 @@ class _SelectexpensePartyDialogState extends State<SelectexpensePartyDialog> {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
                                         content: const Text(
-                                          "Account created successfully!",
+                                          "Customer created successfully!",
                                           style: TextStyle(color: Colors.white),
                                         ),
                                         backgroundColor: Colors.green[600],
@@ -181,7 +181,7 @@ class _SelectexpensePartyDialogState extends State<SelectexpensePartyDialog> {
                                     AlwaysStoppedAnimation(Colors.white),
                               ),
                             )
-                          : const Text("Create Account"),
+                          : const Text("Create Customer"),
                     ),
                   ],
                 );
@@ -194,7 +194,6 @@ class _SelectexpensePartyDialogState extends State<SelectexpensePartyDialog> {
   }
 
   Future<void> _loadData() async {
-    // Only show the main loader if we don't have any data yet
     if (_allParties.isEmpty) {
       setState(() {
         _isLoading = true;
@@ -203,8 +202,8 @@ class _SelectexpensePartyDialogState extends State<SelectexpensePartyDialog> {
 
     try {
       final data = await widget.onRefresh!();
-      // Filter list to only show parties with type "EXPENSE"
-      final filteredList = data.where((e) => e.typ == "EXPENSE").toList();
+      // Filter list to only show parties with type "CUSTOMER"
+      final filteredList = data.where((e) => e.typ == "CUSTOMER").toList();
       
       setState(() {
         _allParties = filteredList;
@@ -215,7 +214,6 @@ class _SelectexpensePartyDialogState extends State<SelectexpensePartyDialog> {
       setState(() {
         _isLoading = false;
       });
-      // Handle error if needed
     }
   }
 
@@ -297,7 +295,6 @@ class _SelectexpensePartyDialogState extends State<SelectexpensePartyDialog> {
                   ],
                 ),
               ),
-              // No add button for expense accounts unless requested
               IconButton(
                 onPressed: _showAddAccountDialog,
                 icon: Container(
@@ -331,7 +328,7 @@ class _SelectexpensePartyDialogState extends State<SelectexpensePartyDialog> {
               controller: _searchController,
               style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
               decoration: InputDecoration(
-                hintText: "Find expense account...",
+                hintText: "Find customer account...",
                 hintStyle: TextStyle(
                   color: Colors.grey[400],
                   fontSize: 15,
@@ -479,11 +476,11 @@ class _SelectexpensePartyDialogState extends State<SelectexpensePartyDialog> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.receipt_long_rounded,
+              Icon(Icons.person_search_rounded,
                   size: 64, color: Colors.grey[200]),
               const SizedBox(height: 16),
               Text(
-                "No Account Found",
+                "No Customer Found",
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w800,

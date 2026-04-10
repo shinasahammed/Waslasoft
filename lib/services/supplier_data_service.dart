@@ -3,18 +3,18 @@ import 'package:http/http.dart' as http;
 import 'package:waslasoft/models/expense_data_model.dart';
 import 'package:waslasoft/services/sales_auth_service.dart';
 
-class ExpenseDataService {
-  final Uri uri = Uri.https("vansales.waslasoft.com", "/api/v1/expense_data/", {
+class SupplierDataService {
+  final Uri uri = Uri.https("vansales.waslasoft.com", "/api/v1/supplier_data/", {
     "client_code": "1999",
   });
 
-  /// Fetch list of expense data (parties/accounts)
+  /// Fetch list of supplier data
   Future<List<Expensedatamodel>> fetchData() async {
     try {
       final response = await http.get(uri, headers: AuthService.headers);
 
-      print("EXPENSE DATA STATUS CODE: ${response.statusCode}");
-      print("EXPENSE DATA RESPONSE BODY: ${response.body}");
+      print("SUPPLIER DATA STATUS CODE: ${response.statusCode}");
+      print("SUPPLIER DATA RESPONSE BODY: ${response.body}");
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
@@ -29,7 +29,7 @@ class ExpenseDataService {
               .toList();
         }
 
-        throw Exception("Unexpected response format for Expense Data");
+        throw Exception("Unexpected response format for Supplier Data");
       } else {
         throw Exception("Server Error: ${response.statusCode}");
       }
@@ -38,20 +38,16 @@ class ExpenseDataService {
     }
   }
 
-  /// Helper to fetch just the names
-  Future<List<String>> fetchNames() async {
-    final data = await fetchData();
-    return data.where((e) => e.name != null).map((e) => e.name!).toList();
-  }
-
-  /// Add a new party (CUSTOMER, PURCHASE or EXPENSE)
-  Future<Expensedatamodel?> createParty({
+  /// Create a new supplier
+  Future<Expensedatamodel?> createSupplier({
     required String name,
     required String openingBalance,
-    required String typ,
   }) async {
     try {
-      final body = {"name": name, "open_balance": openingBalance, "typ": typ};
+      final body = {
+        "supplier_name": name,
+        "open_balance": openingBalance,
+      };
 
       final response = await http.post(
         uri,
@@ -59,8 +55,8 @@ class ExpenseDataService {
         body: jsonEncode(body),
       );
 
-      print("CREATE PARTY STATUS CODE: ${response.statusCode}");
-      print("CREATE PARTY RESPONSE BODY: ${response.body}");
+      print("CREATE SUPPLIER STATUS CODE: ${response.statusCode}");
+      print("CREATE SUPPLIER RESPONSE BODY: ${response.body}");
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final decoded = jsonDecode(response.body);
@@ -70,13 +66,12 @@ class ExpenseDataService {
         return Expensedatamodel(
           name: name,
           openBalance: openingBalance,
-          typ: typ,
         );
       } else {
         throw Exception("Server Error: ${response.statusCode}");
       }
     } catch (e) {
-      throw Exception("Create Party Error: $e");
+      throw Exception("Create Supplier Error: $e");
     }
   }
 }

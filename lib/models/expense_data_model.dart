@@ -38,9 +38,9 @@ class Expensedatamodel {
     });
 
     factory Expensedatamodel.fromJson(Map<String, dynamic> json) => Expensedatamodel(
-        expenseId: json["expense_id"],
+        expenseId: json["expense_id"] ?? (json["supplier_id"] != null ? int.tryParse(json["supplier_id"].toString()) : null),
         createdBy: json["created_by"],
-        name: json["name"],
+        name: json["name"] ?? json["supplier_name"],
         typ: json["typ"],
         clientCode: json["client_code"],
         openBalance: json["open_balance"],

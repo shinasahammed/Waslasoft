@@ -306,9 +306,10 @@ class _ExpenseScreenState extends State<ExpenseScreen> {
                                                   final success =
                                                       await ExpenseDataService()
                                                           .createParty(
-                                                    nameController.text.trim(),
-                                                    balanceController.text
+                                                    name: nameController.text.trim(),
+                                                    openingBalance: balanceController.text
                                                         .trim(),
+                                                    typ: "EXPENSE",
                                                   );
                                                   if (success != null &&
                                                       context.mounted) {

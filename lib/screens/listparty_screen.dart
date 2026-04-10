@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:waslasoft/models/expense_data_model.dart';
+import 'package:waslasoft/services/expense_data_service.dart';
 
 class ListPartyScreen extends StatefulWidget {
   const ListPartyScreen({super.key});
@@ -13,6 +15,7 @@ class _ListPartyScreenState extends State<ListPartyScreen> {
     1.0,
   );
   final ScrollController _scrollController = ScrollController();
+  final TextEditingController _searchController = TextEditingController();
   bool _isSearchVisible = false;
 
   final Color _primaryBlue = const Color(0xFF1F3A5F);
@@ -25,10 +28,86 @@ class _ListPartyScreenState extends State<ListPartyScreen> {
     "Expense",
   ];
 
+  Future<List<Expensedatamodel>>? _partiesFuture;
+  final ExpenseDataService _dataService = ExpenseDataService();
+
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    _searchController.addListener(() {
+      setState(() {});
+    });
+    _partiesFuture = _dataService.fetchData();
+  }
+
+  void _refreshData() {
+    setState(() {
+      _partiesFuture = _dataService.fetchData();
+    });
+  }
+
+  void _showPartyTypeDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Text(
+            "Select Party Type",
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildTypeOption(
+                context,
+                "Customer",
+                "CUSTOMER",
+                Icons.person_outline,
+              ),
+              _buildTypeOption(
+                context,
+                "Purchase Party",
+                "PURCHASE",
+                Icons.shopping_bag_outlined,
+              ),
+              _buildTypeOption(
+                context,
+                "Expense",
+                "EXPENSE",
+                Icons.receipt_long_outlined,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildTypeOption(
+    BuildContext context,
+    String title,
+    String value,
+    IconData icon,
+  ) {
+    return ListTile(
+      leading: Icon(icon, color: _primaryBlue),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+      onTap: () async {
+        Navigator.pop(context);
+        final result = await Navigator.pushNamed(
+          context,
+          '/addparty',
+          arguments: value,
+        );
+        if (result == true) {
+          _refreshData();
+        }
+      },
+    );
   }
 
   void _onScroll() {
@@ -43,6 +122,7 @@ class _ListPartyScreenState extends State<ListPartyScreen> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _searchController.dispose();
     _appBarOpacityNotifier.dispose();
     super.dispose();
   }
@@ -113,9 +193,7 @@ class _ListPartyScreenState extends State<ListPartyScreen> {
                       Row(
                         children: [
                           GestureDetector(
-                            onTap: () {
-                              Navigator.pushNamed(context, '/addparty');
-                            },
+                            onTap: _showPartyTypeDialog,
                             child: Container(
                               height: 40,
                               width: 130,
@@ -250,7 +328,7 @@ class _ListPartyScreenState extends State<ListPartyScreen> {
         controller: _scrollController,
         child: Column(
           children: [
-            const SizedBox(height: 200), // Clearing the custom AppBar
+            const SizedBox(height: 20), // Clearing the custom AppBar
             // Sub-header with Add New and Filter
             if (_isSearchVisible)
               Padding(
@@ -269,6 +347,7 @@ class _ListPartyScreenState extends State<ListPartyScreen> {
                     ],
                   ),
                   child: TextField(
+                    controller: _searchController,
                     decoration: InputDecoration(
                       hintText: "Search products...",
                       hintStyle: TextStyle(
@@ -305,61 +384,69 @@ class _ListPartyScreenState extends State<ListPartyScreen> {
             const Divider(height: 1, thickness: 1),
 
             // Party List
-            _buildPartyItem(
-              index: "1",
-              name: "ANANDU",
-              amount: "30.00",
-              statusColor: Colors.orange,
+            FutureBuilder<List<Expensedatamodel>>(
+              future: _partiesFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Padding(
+                    padding: EdgeInsets.only(top: 40),
+                    child: Center(child: CircularProgressIndicator()),
+                  );
+                } else if (snapshot.hasError) {
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 40),
+                    child: Center(child: Text("Error: ${snapshot.error}")),
+                  );
+                } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return const Padding(
+                    padding: EdgeInsets.only(top: 40),
+                    child: Center(child: Text("No parties found")),
+                  );
+                }
+
+                final parties = snapshot.data!;
+                // Filter logic
+                final filteredByDropdown = _selectedFilter == "All"
+                    ? parties
+                    : parties
+                          .where((p) {
+                            if (_selectedFilter == "Customer")
+                              return p.typ == "CUSTOMER";
+                            if (_selectedFilter == "Purchase Party")
+                              return p.typ == "PURCHASE";
+                            if (_selectedFilter == "Expense")
+                              return p.typ == "EXPENSE";
+                            return true;
+                          })
+                          .where((p) {
+                            final query = _searchController.text.toLowerCase();
+                            if (query.isEmpty) return true;
+                            return (p.name ?? "").toLowerCase().contains(query);
+                          })
+                          .toList();
+
+                return ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: filteredByDropdown.length,
+                  itemBuilder: (context, index) {
+                    final party = filteredByDropdown[index];
+                    return _buildPartyItem(
+                      index: (index + 1).toString(),
+                      id: party.expenseId?.toString(),
+                      name: party.name ?? "Unknown",
+                      amount: party.openBalance ?? "0.00",
+                      statusColor: party.typ == "CUSTOMER"
+                          ? Colors.blue
+                          : party.typ == "PURCHASE"
+                          ? Colors.green
+                          : Colors.orange,
+                    );
+                  },
+                );
+              },
             ),
-            _buildPartyItem(
-              index: "2",
-              name: "SHAMEEM",
-              amount: "145.00",
-              statusColor: Colors.orange,
-            ),
-            _buildPartyItem(
-              index: "3",
-              name: "RAHUL",
-              amount: "2500.00",
-              statusColor: Colors.red,
-            ),
-            _buildPartyItem(
-              index: "4",
-              name: "ARUN",
-              amount: "0.00",
-              statusColor: Colors.green,
-            ),
-            _buildPartyItem(
-              index: "5",
-              name: "ZAYAN",
-              amount: "12.50",
-              statusColor: Colors.orange,
-            ),
-            _buildPartyItem(
-              index: "6",
-              name: "KIRAN",
-              amount: "500.00",
-              statusColor: Colors.red,
-            ),
-            _buildPartyItem(
-              index: "7",
-              name: "MANU",
-              amount: "0.00",
-              statusColor: Colors.green,
-            ),
-            _buildPartyItem(
-              index: "8",
-              name: "VISHNU",
-              amount: "1200.00",
-              statusColor: Colors.orange,
-            ),
-            _buildPartyItem(
-              index: "9",
-              name: "SREEDHU",
-              amount: "75.00",
-              statusColor: Colors.orange,
-            ),
-            const SizedBox(height: 100), // Extra space at bottom for scrolling
+            const SizedBox(height: 20),
           ],
         ),
       ),

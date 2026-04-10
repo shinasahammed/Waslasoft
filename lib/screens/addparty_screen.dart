@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:waslasoft/services/expense_data_service.dart';
 
 class AddPartyScreen extends StatefulWidget {
   const AddPartyScreen({super.key});
@@ -17,18 +18,11 @@ class _AddPartyScreenState extends State<AddPartyScreen> {
 
   // Controllers
   final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _codeController = TextEditingController();
-  final TextEditingController _address1Controller = TextEditingController();
-  final TextEditingController _address2Controller = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _taxController = TextEditingController();
-  final TextEditingController _nationalAddressController =
-      TextEditingController();
-  final TextEditingController _stateCodeController = TextEditingController();
   final TextEditingController _balanceController = TextEditingController();
 
   String _selectedPartyType = "CUSTOMER";
-  final List<String> _partyTypes = ["CUSTOMER", "PURCHASE PARTY", "EXPENSE"];
+  bool _isSaving = false;
+  final ExpenseDataService _dataService = ExpenseDataService();
 
   final Color _primaryBlue = const Color(0xFF1F3A5F);
   final Color _bgSubtle = const Color(0xFFF8FAFC);
@@ -38,6 +32,14 @@ class _AddPartyScreenState extends State<AddPartyScreen> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final args = ModalRoute.of(context)!.settings.arguments;
+      if (args is String) {
+        setState(() {
+          _selectedPartyType = args;
+        });
+      }
+    });
   }
 
   void _onScroll() {
@@ -53,6 +55,8 @@ class _AddPartyScreenState extends State<AddPartyScreen> {
   void dispose() {
     _scrollController.dispose();
     _appBarOpacityNotifier.dispose();
+    _nameController.dispose();
+    _balanceController.dispose();
     super.dispose();
   }
 
@@ -107,7 +111,7 @@ class _AddPartyScreenState extends State<AddPartyScreen> {
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 8),
                             child: const Text(
-                              "List Party",
+                              "Add Party",
                               style: TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
@@ -172,68 +176,12 @@ class _AddPartyScreenState extends State<AddPartyScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(height: 110),
-              _buildSectionHeader("BASIC INFORMATION"),
+              const SizedBox(height: 110),
               _buildModernField(
                 label: "Party Name",
                 controller: _nameController,
                 hint: "Enter party/client name",
                 icon: Icons.person_outline,
-              ),
-              _buildModernField(
-                label: "Code/Number",
-                controller: _codeController,
-                hint: "Internal reference code",
-                icon: Icons.tag,
-              ),
-              _buildDropdownField(),
-
-              const SizedBox(height: 32),
-              _buildSectionHeader("CONTACT & ADDRESS"),
-              _buildModernField(
-                label: "Phone Number",
-                controller: _phoneController,
-                hint: "+91 0000 000000",
-                icon: Icons.phone_outlined,
-                keyboardType: TextInputType.phone,
-              ),
-              _buildModernField(
-                label: "Address Line 1",
-                controller: _address1Controller,
-                hint: "Street address, area",
-                icon: Icons.location_on_outlined,
-              ),
-              _buildModernField(
-                label: "Address Line 2",
-                controller: _address2Controller,
-                hint: "Building, landmark",
-                icon: Icons.map_outlined,
-              ),
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildModernField(
-                      label: "State and Code",
-                      controller: _stateCodeController,
-                      hint: "e.g. Kerala (32)",
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 32),
-              _buildSectionHeader("TAX & FINANCIALS"),
-              _buildModernField(
-                label: "TAX / VAT Number",
-                controller: _taxController,
-                hint: "Enter tax registration number",
-                icon: Icons.receipt_long_outlined,
-              ),
-              _buildModernField(
-                label: "National Address",
-                controller: _nationalAddressController,
-                hint: "Official government address",
-                icon: Icons.account_balance_outlined,
               ),
               _buildModernField(
                 label: "Opening Balance",
@@ -253,17 +201,68 @@ class _AddPartyScreenState extends State<AddPartyScreen> {
     );
   }
 
-  Widget _buildSectionHeader(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 4, bottom: 12),
-      child: Text(
-        title,
-        style: TextStyle(
-          color: _primaryBlue.withValues(alpha: 0.6),
-          fontWeight: FontWeight.w800,
-          fontSize: 12,
-          letterSpacing: 1.2,
+
+  Widget _buildSaveButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 60,
+      child: ElevatedButton(
+        onPressed: _isSaving
+            ? null
+            : () async {
+                if (_formKey.currentState!.validate()) {
+                  setState(() => _isSaving = true);
+                  try {
+                    final result = await _dataService.createParty(
+                      name: _nameController.text.trim(),
+                      openingBalance: _balanceController.text.trim(),
+                      typ: _selectedPartyType,
+                    );
+
+                    if (result != null && mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Party created successfully!'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                      Navigator.pop(context, true);
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Error: $e'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  } finally {
+                    if (mounted) {
+                      setState(() => _isSaving = false);
+                    }
+                  }
+                }
+              },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFFFFB74D),
+          foregroundColor: Colors.black,
+          elevation: 4,
+          shadowColor: const Color(0xFFFFB74D).withValues(alpha: 0.4),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
         ),
+        child: _isSaving
+            ? const CircularProgressIndicator(color: Colors.black)
+            : const Text(
+                "SAVE PARTY",
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 18,
+                  letterSpacing: 1,
+                ),
+              ),
       ),
     );
   }
@@ -311,109 +310,16 @@ class _AddPartyScreenState extends State<AddPartyScreen> {
                 ),
                 floatingLabelBehavior: FloatingLabelBehavior.auto,
               ),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Please enter $label';
+                }
+                return null;
+              },
             ),
           ),
         ],
       ),
     );
   }
-
-  Widget _buildDropdownField() {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        decoration: BoxDecoration(
-          color: _fieldBg,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButtonFormField<String>(
-            value: _selectedPartyType,
-            decoration: InputDecoration(
-              labelText: "Party Type",
-              labelStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
-              border: InputBorder.none,
-              prefixIcon: Icon(
-                Icons.category_outlined,
-                color: _primaryBlue,
-                size: 20,
-              ),
-            ),
-            items: _partyTypes.map((String type) {
-              return DropdownMenuItem(
-                value: type,
-                child: Text(
-                  type,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-              );
-            }).toList(),
-            onChanged: (value) {
-              setState(() {
-                _selectedPartyType = value!;
-              });
-            },
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSaveButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 60,
-      child: ElevatedButton(
-        onPressed: () {
-          if (_formKey.currentState!.validate()) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Saving Party Details...')),
-            );
-            Future.delayed(const Duration(seconds: 1), () {
-              Navigator.pushNamed(context, "/listparty");
-            });
-          }
-        },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFFFFB74D),
-          foregroundColor: Colors.black,
-          elevation: 4,
-          shadowColor: const Color(0xFFFFB74D).withValues(alpha: 0.4),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
-        child: const Text(
-          "SAVE PARTY",
-          style: TextStyle(
-            fontWeight: FontWeight.w900,
-            fontSize: 18,
-            letterSpacing: 1,
-          ),
-        ),
-      ),
-    );
-  }
-
-  // @override
-  // void dispose() {
-  //   _nameController.dispose();
-  //   _codeController.dispose();
-  //   _address1Controller.dispose();
-  //   _address2Controller.dispose();
-  //   _phoneController.dispose();
-  //   _taxController.dispose();
-  //   _nationalAddressController.dispose();
-  //   _stateCodeController.dispose();
-  //   _balanceController.dispose();
-  //   super.dispose();
-  // }
 }

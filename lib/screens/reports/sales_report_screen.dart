@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:waslasoft/models/sales_data_model.dart';
 import 'package:waslasoft/widgets/select_party_dialog.dart';
 
 class SalesReportScreen extends StatefulWidget {
@@ -14,7 +15,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     1.0,
   );
   final ScrollController _scrollController = ScrollController();
-
+List<SaleItem> taskItems = [];
   DateTime _fromDate = DateTime(2026, 3, 12);
   DateTime _toDate = DateTime(2026, 3, 12);
   String _selectedParty = "SELECT PARTY";

@@ -4,9 +4,10 @@ import 'package:waslasoft/models/purchase_data_model.dart';
 import 'package:waslasoft/services/app_config.dart';
 import 'package:waslasoft/services/purchase_data_service.dart';
 import 'package:waslasoft/storage/purchase_storage.dart';
-
-import '../widgets/select_party_dialog.dart';
 import 'printoption_screen.dart';
+
+import 'package:waslasoft/models/expense_data_model.dart';
+import 'package:waslasoft/widgets/purchase_party_dialog.dart';
 
 class PurchaseScreen extends StatefulWidget {
   const PurchaseScreen({super.key});
@@ -23,7 +24,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
   List<PurchaseItem> tasKitem = [];
   bool isLoading = false;
   String _selectedCategory = "All";
-  String _selectedParty = "Select Party";
+  Expensedatamodel? _selectedParty;
   bool _isSearchVisible = false;
   final Map<int, int> _cartQuantities = {};
   double get _totalAmount {
@@ -138,6 +139,16 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
     }
   }
 
+  String _getInitials(String name) {
+    List<String> words = name.trim().split(" ");
+    if (words.length >= 2) {
+      return (words[0][0] + words[1][0]).toUpperCase();
+    } else if (words.isNotEmpty && words[0].isNotEmpty) {
+      return words[0][0].toUpperCase();
+    }
+    return "?";
+  }
+
   @override
   void dispose() {
     _scrollController.dispose();
@@ -210,11 +221,11 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
 
                       Row(
                         children: [
-                          GestureDetector(
+                           GestureDetector(
                             onTap: () async {
-                              final result = await showDialog<String>(
+                              final result = await showDialog<Expensedatamodel>(
                                 context: context,
-                                builder: (context) => const SelectPartyDialog(),
+                                builder: (context) => const SelectpurchasePartyDialog(),
                               );
                               if (result != null) {
                                 setState(() {
@@ -232,7 +243,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                               ),
                               child: Center(
                                 child: Text(
-                                  _selectedParty,
+                                  _selectedParty?.name ?? "SELECT PARTY",
                                   style: const TextStyle(
                                     color: Colors.black,
                                     fontSize: 13,
@@ -510,18 +521,24 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                   ),
                   child: Column(
                     children: [
-                      Row(
+                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.all(10),
+                            width: 44,
+                            height: 44,
                             decoration: BoxDecoration(
-                              color: const Color(0xFF1F3A5F).withOpacity(0.1),
+                              color: const Color(0xFF1F3A5F).withValues(alpha: 0.1),
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(
-                              Icons.person,
-                              color: Color(0xFF1F3A5F),
-                              size: 24,
+                            child: Center(
+                              child: Text(
+                                _getInitials(_selectedParty?.name ?? "?"),
+                                style: const TextStyle(
+                                  color: Color(0xFF1F3A5F),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
                             ),
                           ),
                           const SizedBox(width: 15),
@@ -530,9 +547,9 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  _selectedParty == "Select Party"
-                                      ? "Customer Not Selected"
-                                      : _selectedParty,
+                                  _selectedParty == null
+                                      ? "Vendor Not Selected"
+                                      : _selectedParty!.name!,
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 16,
@@ -540,9 +557,9 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                                   ),
                                 ),
                                 Text(
-                                  _selectedParty == "Select Party"
-                                      ? "Select a party to start billing"
-                                      : "Active Customer",
+                                  _selectedParty == null
+                                      ? "Select a vendor to start purchase"
+                                      : "Active Vendor",
                                   style: const TextStyle(
                                     color: Colors.grey,
                                     fontSize: 12,
@@ -565,7 +582,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                           _buildMiniInfo(Icons.phone, "No Phone"),
                           _buildMiniInfo(
                             Icons.account_balance_wallet,
-                            "Bal: 0.00",
+                            "Bal: ${_selectedParty?.openBalance ?? "0.00"}",
                           ),
                           _buildMiniInfo(Icons.history, "Last: N/A"),
                         ],
@@ -862,7 +879,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                 onTap: () {
                   setState(() {
                     _cartQuantities.clear();
-                    _selectedParty = "Select Party";
+                    _selectedParty = null;
                   });
                   showMessage("Cart cleared");
                 },
