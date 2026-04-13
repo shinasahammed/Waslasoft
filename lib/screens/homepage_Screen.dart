@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'settings_screen.dart';
 import '../services/app_config.dart';
+import '../services/session_service.dart';
+import 'paymentsign_screen.dart';
 
 class Homeepage extends StatefulWidget {
   const Homeepage({super.key});
@@ -199,7 +201,19 @@ class _HomeepageState extends State<Homeepage> {
                           icon: Icons.payments,
                           label: "Payments",
                           onTap: () {
-                            Navigator.pushNamed(context, '/paymentsign');
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => PaymentsignScreen(
+                                  initialParty: SessionService.pendingPaymentParty,
+                                  initialAmount: SessionService.pendingPaymentAmount,
+                                ),
+                              ),
+                            ).then((_) {
+                              // Optional: Clear the pending data when returning to home 
+                              // if you want to ensure it's only used once
+                              SessionService.clearPendingPayment();
+                            });
                           },
                         ),
                       ],

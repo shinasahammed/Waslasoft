@@ -10,7 +10,14 @@ import 'package:waslasoft/widgets/purchase_party_dialog.dart';
 import 'package:waslasoft/widgets/payment_method_dialog.dart';
 
 class PaymentsignScreen extends StatefulWidget {
-  const PaymentsignScreen({super.key});
+  final Expensedatamodel? initialParty;
+  final double? initialAmount;
+
+  const PaymentsignScreen({
+    super.key,
+    this.initialParty,
+    this.initialAmount,
+  });
 
   @override
   State<PaymentsignScreen> createState() => _PaymentsignScreenState();
@@ -37,6 +44,14 @@ class _PaymentsignScreenState extends State<PaymentsignScreen> {
     super.initState();
     _scrollController.addListener(_onScroll);
     _amountController.addListener(_onAmountChanged);
+
+    // Auto-select party and amount if provided (e.g., from Purchase flow)
+    if (widget.initialParty != null) {
+      _selectedParty = widget.initialParty;
+    }
+    if (widget.initialAmount != null && widget.initialAmount! > 0) {
+      _amountController.text = widget.initialAmount!.toStringAsFixed(2);
+    }
   }
 
   void _onAmountChanged() {

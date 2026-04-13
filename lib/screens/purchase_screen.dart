@@ -8,6 +8,7 @@ import 'printoption_screen.dart';
 
 import 'package:waslasoft/models/expense_data_model.dart';
 import 'package:waslasoft/widgets/purchase_party_dialog.dart';
+import 'order_summary_screen.dart';
 
 class PurchaseScreen extends StatefulWidget {
   const PurchaseScreen({super.key});
@@ -27,6 +28,7 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
   Expensedatamodel? _selectedParty;
   bool _isSearchVisible = false;
   final Map<int, int> _cartQuantities = {};
+  final Map<int, bool> _cartUnits = {};
   double get _totalAmount {
     double total = 0;
     _cartQuantities.forEach((itemId, qty) {
@@ -67,9 +69,21 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
     setState(() {
       if (newQuantity <= 0) {
         _cartQuantities.remove(id);
+        _cartUnits.remove(id);
       } else {
         _cartQuantities[id] = newQuantity;
+        if (!_cartUnits.containsKey(id)) {
+          _cartUnits[id] = true; // Default to PCS
+        }
       }
+    });
+  }
+
+  void _updateUnit(PurchaseItem item, bool isPcs) {
+    final id = item.itemId ?? item.id;
+    if (id == null) return;
+    setState(() {
+      _cartUnits[id] = isPcs;
     });
   }
 
@@ -643,8 +657,11 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
                             stock: item.qty.toString(),
                             initialQuantity:
                                 _cartQuantities[item.itemId ?? item.id] ?? 0,
+                            initialIsPcs:
+                                _cartUnits[item.itemId ?? item.id] ?? true,
                             onQuantityChanged: (newQty) =>
                                 _updateQuantity(item, newQty),
+                            onUnitChanged: (isPcs) => _updateUnit(item, isPcs),
                           );
                         },
                       ),
@@ -656,114 +673,6 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
         ),
       ),
       bottomNavigationBar: _buildBottomCartBar(),
-    );
-  }
-
-  void _showPrintConfirmation(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFB74D).withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.print_rounded,
-                  color: Color(0xFFFFB74D),
-                  size: 40,
-                ),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                "Purchase Successful",
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1F3A5F),
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                "Do you want to print a bill for this transaction?",
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey, fontSize: 14),
-              ),
-              const SizedBox(height: 32),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text("Purchase confirmed"),
-                            behavior: SnackBarBehavior.floating,
-                            backgroundColor: Color(0xFF1F3A5F),
-                          ),
-                        );
-                      },
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        side: BorderSide(color: Colors.grey[300]!),
-                      ),
-                      child: const Text(
-                        "No",
-                        style: TextStyle(
-                          color: Colors.grey,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const PrintOptionScreen(),
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFFB74D),
-                        foregroundColor: Colors.black87,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        "Yes, Print",
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 
@@ -853,8 +762,46 @@ class _PurchaseScreenState extends State<PurchaseScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               ElevatedButton(
-                onPressed: () {
-                  _showPrintConfirmation(context);
+                onPressed: () async {
+                  if (_selectedParty == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("Please select a vendor before confirming purchase"),
+                        backgroundColor: Color(0xFF1F3A5F),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                    return;
+                  }
+                  if (_cartQuantities.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("Please add items to your cart before confirming"),
+                        backgroundColor: Color(0xFF1F3A5F),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                    return;
+                  }
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => OrderSummaryScreen(
+                        items: tasKitem,
+                        initialQuantities: _cartQuantities,
+                        initialUnits: _cartUnits,
+                        selectedParty: _selectedParty,
+                      ),
+                    ),
+                  );
+                  if (result != null && result is Map) {
+                    setState(() {
+                      _cartQuantities.clear();
+                      _cartQuantities.addAll(result['quantities']);
+                      _cartUnits.clear();
+                      _cartUnits.addAll(result['units']);
+                    });
+                  }
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFFFB74D),
@@ -920,14 +867,18 @@ class ProductCardWidget extends StatefulWidget {
   final String price;
   final String stock;
   final int initialQuantity;
+  final bool initialIsPcs;
   final Function(int) onQuantityChanged;
+  final Function(bool) onUnitChanged;
   const ProductCardWidget({
     super.key,
     required this.name,
     required this.price,
     required this.stock,
     required this.initialQuantity,
+    this.initialIsPcs = true,
     required this.onQuantityChanged,
+    required this.onUnitChanged,
   });
 
   @override
@@ -938,9 +889,7 @@ class _ProductCardWidgetState extends State<ProductCardWidget> {
   bool isPcs = true;
 
   void _toggleUnit() {
-    setState(() {
-      isPcs = !isPcs;
-    });
+    widget.onUnitChanged(!widget.initialIsPcs);
   }
 
   void _increment() {
@@ -1080,10 +1029,10 @@ class _ProductCardWidgetState extends State<ProductCardWidget> {
                                     "pcs",
                                     style: TextStyle(
                                       fontSize: 10,
-                                      fontWeight: isPcs
+                                      fontWeight: widget.initialIsPcs
                                           ? FontWeight.bold
                                           : FontWeight.normal,
-                                      color: isPcs
+                                      color: widget.initialIsPcs
                                           ? const Color(0xFF1F3A5F)
                                           : Colors.grey[600],
                                     ),
@@ -1099,10 +1048,10 @@ class _ProductCardWidgetState extends State<ProductCardWidget> {
                                     "kg",
                                     style: TextStyle(
                                       fontSize: 10,
-                                      fontWeight: !isPcs
+                                      fontWeight: !widget.initialIsPcs
                                           ? FontWeight.bold
                                           : FontWeight.normal,
-                                      color: !isPcs
+                                      color: !widget.initialIsPcs
                                           ? const Color(0xFF1F3A5F)
                                           : Colors.grey[600],
                                     ),

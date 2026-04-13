@@ -1,7 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:waslasoft/models/expense_data_model.dart';
+import 'package:waslasoft/screens/paymentsign_screen.dart';
 
 class PrintOptionScreen extends StatefulWidget {
-  const PrintOptionScreen({super.key});
+  final String orderId;
+  final String orderDate;
+  final double totalAmount;
+  final Expensedatamodel? selectedParty;
+
+  const PrintOptionScreen({
+    super.key,
+    this.orderId = "#WSL-2489",
+    this.orderDate = "11 Mar 2026",
+    this.totalAmount = 2450.00,
+    this.selectedParty,
+  });
 
   @override
   State<PrintOptionScreen> createState() => _PrintOptionScreenState();
@@ -120,7 +133,15 @@ class _PrintOptionScreenState extends State<PrintOptionScreen> {
                   sublabel: "History/Gateway",
                   color: _accentPurple,
                   onTap: () {
-                    Navigator.pushNamed(context, '/paymentsign');
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => PaymentsignScreen(
+                          initialParty: widget.selectedParty,
+                          initialAmount: widget.totalAmount,
+                        ),
+                      ),
+                    );
                   },
                 ),
                 _buildActionCard(
@@ -187,8 +208,8 @@ class _PrintOptionScreenState extends State<PrintOptionScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildInfoItem("ORDER ID", "#WSL-2489", Colors.white),
-              _buildInfoItem("DATE", "11 Mar 2026", Colors.white),
+              _buildInfoItem("ORDER ID", widget.orderId, Colors.white),
+              _buildInfoItem("DATE", widget.orderDate, Colors.white),
             ],
           ),
           const Padding(
@@ -207,7 +228,7 @@ class _PrintOptionScreenState extends State<PrintOptionScreen> {
                 ),
               ),
               Text(
-                "₹ 2,450.00",
+                "₹ ${widget.totalAmount.toStringAsFixed(2)}",
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 24,
