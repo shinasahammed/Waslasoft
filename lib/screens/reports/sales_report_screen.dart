@@ -20,8 +20,8 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
   );
   final ScrollController _scrollController = ScrollController();
   List<SaleItem> taskItems = [];
-  DateTime _fromDate = DateTime(2026, 3, 12);
-  DateTime _toDate = DateTime(2026, 3, 12);
+  DateTime _fromDate = DateTime.now();
+  DateTime _toDate = DateTime.now();
   Expensedatamodel? _selectedParty;
 
   List<Datum> _transactions = [];
@@ -39,14 +39,26 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     setState(() => _isLoading = true);
     final transactions = await TransactionStorage.getSalesTransactions();
 
-    // Filter logic can be applied here based on _fromDate, _toDate, _selectedParty.
-    // For now, load all local cache then filter by party if selected.
-    List<Datum> filteredTransactions = transactions;
-    if (_selectedParty != null) {
-      filteredTransactions = transactions
-          .where((tx) => tx.name == _selectedParty!.name)
-          .toList();
-    }
+    DateTime start = DateTime(_fromDate.year, _fromDate.month, _fromDate.day);
+    DateTime end = DateTime(_toDate.year, _toDate.month, _toDate.day)
+        .add(const Duration(days: 1));
+
+    List<Datum> filteredTransactions = transactions.where((tx) {
+      if (tx.saleDate == null) return false;
+
+      // Date Filter
+      bool dateMatch = (tx.saleDate!.isAtSameMomentAs(start) ||
+              tx.saleDate!.isAfter(start)) &&
+          tx.saleDate!.isBefore(end);
+
+      // Party Filter
+      bool partyMatch = true;
+      if (_selectedParty != null) {
+        partyMatch = tx.name == _selectedParty!.name;
+      }
+
+      return dateMatch && partyMatch;
+    }).toList();
 
     double total = 0.0;
     for (var tx in filteredTransactions) {
@@ -113,6 +125,7 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
           _toDate = picked;
         }
       });
+      _loadTransactions(); // Reload with new dates
     }
   }
 
@@ -420,73 +433,47 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
                   ),
                   Container(
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.05),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
+                      color: Colors.transparent, // Changed to transparent as items will have their own cards
                     ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(24),
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: SizedBox(
-                          width: 780,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildListHeader(),
-                              const Divider(height: 1),
-                              _isLoading
-                                  ? const Padding(
-                                      padding: EdgeInsets.all(40.0),
-                                      child: Center(
-                                        child: CircularProgressIndicator(),
-                                      ),
-                                    )
-                                  : _transactions.isEmpty
-                                  ? const Padding(
-                                      padding: EdgeInsets.all(40.0),
-                                      child: Center(
-                                        child: Text("No transactions found"),
-                                      ),
-                                    )
-                                  : ListView.builder(
-                                      shrinkWrap: true,
-                                      physics:
-                                          const NeverScrollableScrollPhysics(),
-                                      padding: EdgeInsets.zero,
-                                      itemCount: _transactions.length,
-                                      itemBuilder: (context, index) {
-                                        final tx = _transactions[index];
-                                        final isLast =
-                                            index == _transactions.length - 1;
+                    child: _isLoading
+                        ? const Padding(
+                            padding: EdgeInsets.all(40.0),
+                            child: Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                          )
+                        : _transactions.isEmpty
+                            ? const Padding(
+                                padding: EdgeInsets.all(40.0),
+                                child: Center(
+                                  child: Text("No transactions found"),
+                                ),
+                              )
+                            : ListView.builder(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                padding: EdgeInsets.zero,
+                                itemCount: _transactions.length,
+                                itemBuilder: (context, index) {
+                                  final tx = _transactions[index];
+                                  final isLast = index == _transactions.length - 1;
 
-                                        String displayDate = "Unknown";
-                                        if (tx.saleDate != null) {
-                                          displayDate =
-                                              "${tx.saleDate!.day}-${tx.saleDate!.month}-${tx.saleDate!.year}";
-                                        }
+                                  String displayDate = "N/A";
+                                  if (tx.saleDate != null) {
+                                    displayDate = "${tx.saleDate!.day} ${_getMonth(tx.saleDate!.month)} ${tx.saleDate!.year}";
+                                  }
 
-                                        return _buildActivityCard(
-                                          sno: "${index + 1}",
-                                          billNo: tx.orderNo ?? "N/A",
-                                          date: displayDate,
-                                          party: tx.name ?? "Cash Customer",
-                                          netTotal: tx.grandTotal ?? "0.00",
-                                          isLast: isLast,
-                                        );
-                                      },
-                                    ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
+                                  return _buildActivityItem(
+                                    sno: index + 1,
+                                    billNo: tx.orderNo ?? "N/A",
+                                    date: displayDate,
+                                    party: tx.name ?? "Cash Customer",
+                                    netTotal: tx.grandTotal ?? "0.00",
+                                    paymentMode: _getPaymentMode(tx),
+                                    isLast: isLast,
+                                  );
+                                },
+                              ),
                   ),
                 ],
               ),
@@ -649,143 +636,170 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     "Dec",
   ][m - 1];
 
-  Widget _buildListHeader() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 18),
-      decoration: const BoxDecoration(color: Color(0xFF1F3A5F)),
-      child: Row(
-        children: [
-          const SizedBox(width: 20),
-          _tableCell(width: 60, content: Text("#", style: _headerStyle())),
-          _tableCell(
-            width: 150,
-            content: Text("BILL NO", style: _headerStyle()),
-          ),
-          _tableCell(width: 150, content: Text("DATE", style: _headerStyle())),
-          _tableCell(width: 250, content: Text("PARTY", style: _headerStyle())),
-          _tableCell(
-            width: 150,
-            content: Text(
-              "NET TOTAL",
-              textAlign: TextAlign.right,
-              style: _headerStyle(),
-            ),
-          ),
-        ],
-      ),
-    );
+  String _getPaymentMode(Datum tx) {
+    if (tx.paymentModeCash != null && double.parse(tx.paymentModeCash!) > 0) {
+      return "CASH";
+    } else if (tx.paymentModeCreditcard != null &&
+        double.parse(tx.paymentModeCreditcard!) > 0) {
+      return "CARD";
+    } else if (tx.creditTotal != null && double.parse(tx.creditTotal!) > 0) {
+      return "CREDIT";
+    }
+    return "";
   }
 
-  TextStyle _headerStyle() => const TextStyle(
-    color: Colors.white,
-    fontWeight: FontWeight.w900,
-    fontSize: 14,
-    letterSpacing: 1.2,
-  );
-
-  Widget _buildActivityCard({
-    required String sno,
+  Widget _buildActivityItem({
+    required int sno,
     required String billNo,
     required String date,
     required String party,
     required String netTotal,
+    required String paymentMode,
     bool isLast = false,
   }) {
-    return Column(
-      children: [
-        IntrinsicHeight(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Row(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const SizedBox(width: 20),
-                // #
-                _tableCell(
-                  width: 60,
-                  content: Text(
-                    sno,
-                    style: TextStyle(
-                      color: Colors.blueGrey.withValues(alpha: 0.5),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                Row(
+                  children: [
+                    Container(
+                      height: 32,
+                      width: 32,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1F3A5F).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Center(
+                        child: Text(
+                          "#$sno",
+                          style: const TextStyle(
+                            color: Color(0xFF1F3A5F),
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-
-                // BILL NO
-                _tableCell(
-                  width: 150,
-                  content: Text(
-                    billNo,
-                    style: const TextStyle(
-                      color: Color(0xFF1F2937),
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16,
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          billNo,
+                          style: const TextStyle(
+                            color: Color(0xFF1F3A5F),
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                          ),
+                        ),
+                        Text(
+                          date,
+                          style: TextStyle(
+                            color: Colors.blueGrey.withValues(alpha: 0.5),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
+                  ],
                 ),
-
-                // DATE
-                _tableCell(
-                  width: 150,
-                  content: Text(
-                    date,
-                    style: TextStyle(
-                      color: Colors.black.withValues(alpha: 0.6),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      "₹$netTotal",
+                      style: const TextStyle(
+                        color: Color(0xFF1F3A5F),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 18,
+                      ),
                     ),
-                  ),
+                    if (paymentMode.isNotEmpty) _buildPaymentBadge(paymentMode),
+                  ],
                 ),
-
-                // PARTY
-                _tableCell(
-                  width: 250,
-                  content: Text(
+              ],
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Divider(height: 1),
+            ),
+            Row(
+              children: [
+                Icon(
+                  Icons.person_outline,
+                  size: 16,
+                  color: Colors.grey[400],
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
                     party,
-                    style: const TextStyle(
-                      color: Color(0xFF1F2937),
+                    style: TextStyle(
+                      color: Colors.grey[700],
                       fontWeight: FontWeight.w600,
-                      fontSize: 15,
+                      fontSize: 14,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-
-                // NET TOTAL
-                _tableCell(
-                  width: 150,
-                  content: Text(
-                    "₹$netTotal",
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(
-                      color: Colors.teal,
-                      fontWeight: FontWeight.w900,
-                      fontSize: 18,
-                    ),
-                  ),
-                ),
               ],
             ),
-          ),
+          ],
         ),
-        if (!isLast)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Divider(
-              height: 1,
-              color: Colors.grey.withValues(alpha: 0.1),
-            ),
-          ),
-      ],
+      ),
     );
   }
 
-  Widget _tableCell({required double width, required Widget content}) {
+  Widget _buildPaymentBadge(String mode) {
+    Color color;
+    switch (mode) {
+      case "CASH":
+        color = Colors.green;
+        break;
+      case "CARD":
+        color = Colors.blue;
+        break;
+      case "CREDIT":
+        color = Colors.orange;
+        break;
+      default:
+        color = Colors.grey;
+    }
+
     return Container(
-      width: width,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: content,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.3), width: 0.5),
+      ),
+      child: Text(
+        mode,
+        style: TextStyle(
+          color: color,
+          fontSize: 9,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.5,
+        ),
+      ),
     );
   }
 

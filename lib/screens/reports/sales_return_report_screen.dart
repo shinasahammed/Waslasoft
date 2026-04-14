@@ -21,8 +21,8 @@ class _SalesReturnReportScreenState extends State<SalesReturnReportScreen> {
   );
   final ScrollController _scrollController = ScrollController();
 
-  DateTime _fromDate = DateTime(2026, 3, 16);
-  DateTime _toDate = DateTime(2026, 3, 16);
+  DateTime _fromDate = DateTime.now();
+  DateTime _toDate = DateTime.now();
   Expensedatamodel? _selectedParty;
   
   List<Datum> _returnTransactions = [];
@@ -40,12 +40,26 @@ class _SalesReturnReportScreenState extends State<SalesReturnReportScreen> {
     setState(() => _isLoading = true);
     final transactions = await TransactionStorage.getSalesReturnTransactions();
     
-    List<Datum> filteredTransactions = transactions;
-    if (_selectedParty != null) {
-      filteredTransactions = transactions
-          .where((tx) => tx.name == _selectedParty!.name)
-          .toList();
-    }
+    DateTime start = DateTime(_fromDate.year, _fromDate.month, _fromDate.day);
+    DateTime end = DateTime(_toDate.year, _toDate.month, _toDate.day)
+        .add(const Duration(days: 1));
+
+    List<Datum> filteredTransactions = transactions.where((tx) {
+      if (tx.saleDate == null) return false;
+
+      // Date Filter
+      bool dateMatch = (tx.saleDate!.isAtSameMomentAs(start) ||
+              tx.saleDate!.isAfter(start)) &&
+          tx.saleDate!.isBefore(end);
+
+      // Party Filter
+      bool partyMatch = true;
+      if (_selectedParty != null) {
+        partyMatch = tx.name == _selectedParty!.name;
+      }
+
+      return dateMatch && partyMatch;
+    }).toList();
 
     double total = 0.0;
     for (var tx in filteredTransactions) {
@@ -111,6 +125,7 @@ class _SalesReturnReportScreenState extends State<SalesReturnReportScreen> {
           _toDate = picked;
         }
       });
+      _loadTransactions();
     }
   }
 
@@ -356,155 +371,231 @@ class _SalesReturnReportScreenState extends State<SalesReturnReportScreen> {
   Widget _buildReportTable() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(24),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: SizedBox(
-              width: 650,
-              child: Column(
-                children: [
-                  _buildTableHeader(),
-                  const Divider(height: 1),
-                  _isLoading
-                      ? const Padding(
-                          padding: EdgeInsets.all(40.0),
-                          child: Center(child: CircularProgressIndicator()),
-                        )
-                      : _returnTransactions.isEmpty
-                          ? const Padding(
-                              padding: EdgeInsets.all(40.0),
-                              child: Center(
-                                child: Text("No returns found"),
-                              ),
-                            )
-                          : ListView.separated(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              padding: EdgeInsets.zero,
-                              itemCount: _returnTransactions.length,
-                              separatorBuilder: (context, index) =>
-                                  const Divider(height: 1),
-                              itemBuilder: (context, index) {
-                                final tx = _returnTransactions[index];
-                                
-                                String displayDate = "Unknown";
-                                if (tx.saleDate != null) {
-                                  displayDate = "${tx.saleDate!.day}-${tx.saleDate!.month}-${tx.saleDate!.year}";
-                                }
-
-                                return _buildTableRow(
-                                  index: (index + 1).toString(),
-                                  retNo: tx.orderNo ?? "N/A",
-                                  date: displayDate,
-                                  party: tx.name ?? "Cash Customer",
-                                  netTotal: tx.grandTotal ?? "0.00",
-                                );
-                              },
-                            ),
-                ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 12),
+            child: const Text(
+              "RETURN ACTIVITY",
+              style: TextStyle(
+                color: Colors.blueGrey,
+                fontWeight: FontWeight.w800,
+                fontSize: 12,
+                letterSpacing: 1.5,
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
+          _isLoading
+              ? const Padding(
+                  padding: EdgeInsets.all(40.0),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              : _returnTransactions.isEmpty
+                  ? const Padding(
+                      padding: EdgeInsets.all(40.0),
+                      child: Center(
+                        child: Text("No returns found"),
+                      ),
+                    )
+                  : ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      padding: EdgeInsets.zero,
+                      itemCount: _returnTransactions.length,
+                      itemBuilder: (context, index) {
+                        final tx = _returnTransactions[index];
+                        final isLast = index == _returnTransactions.length - 1;
 
-  Widget _buildTableHeader() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 18),
-      decoration: const BoxDecoration(color: Color(0xFF1F3A5F)),
-      child: Row(
-        children: [
-          const SizedBox(width: 20),
-          _tableCell(width: 50, content: Text("#", style: _headerStyle())),
-          _tableCell(
-            width: 120,
-            content: Text("Ret No", style: _headerStyle()),
-          ),
-          _tableCell(width: 110, content: Text("Date", style: _headerStyle())),
-          _tableCell(width: 200, content: Text("Party", style: _headerStyle())),
-          _tableCell(
-            width: 120,
-            content: Text(
-              "NetTotal",
-              style: _headerStyle(),
-              textAlign: TextAlign.right,
-            ),
-          ),
-          const SizedBox(width: 20),
+                        String displayDate = "N/A";
+                        if (tx.saleDate != null) {
+                          displayDate =
+                              "${tx.saleDate!.day} ${_getMonth(tx.saleDate!.month)} ${tx.saleDate!.year}";
+                        }
+
+                        return _buildReturnActivityItem(
+                          sno: index + 1,
+                          retNo: tx.orderNo ?? "N/A",
+                          date: displayDate,
+                          party: tx.name ?? "Cash Customer",
+                          netTotal: tx.grandTotal ?? "0.00",
+                          paymentMode: _getPaymentMode(tx),
+                          isLast: isLast,
+                        );
+                      },
+                    ),
         ],
       ),
     );
   }
 
-  Widget _buildTableRow({
-    required String index,
+  String _getPaymentMode(Datum tx) {
+    if (tx.paymentModeCash != null && double.parse(tx.paymentModeCash!) > 0) {
+      return "CASH";
+    } else if (tx.paymentModeCreditcard != null &&
+        double.parse(tx.paymentModeCreditcard!) > 0) {
+      return "CARD";
+    } else if (tx.creditTotal != null && double.parse(tx.creditTotal!) > 0) {
+      return "CREDIT";
+    }
+    return "";
+  }
+
+  Widget _buildReturnActivityItem({
+    required int sno,
     required String retNo,
     required String date,
     required String party,
     required String netTotal,
+    required String paymentMode,
+    bool isLast = false,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      child: Row(
-        children: [
-          const SizedBox(width: 20),
-          _tableCell(width: 50, content: Text(index, style: _rowStyle())),
-          _tableCell(width: 120, content: Text(retNo, style: _rowStyle())),
-          _tableCell(width: 110, content: Text(date, style: _rowStyle())),
-          _tableCell(
-            width: 200,
-            content: Text(
-              party,
-              style: _rowStyle(),
-              overflow: TextOverflow.ellipsis,
-            ),
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
           ),
-          _tableCell(
-            width: 120,
-            content: Text(
-              netTotal,
-              style: _rowStyle(color: Colors.teal),
-              textAlign: TextAlign.right,
-            ),
-          ),
-          const SizedBox(width: 20),
         ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      height: 32,
+                      width: 32,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1F3A5F).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Center(
+                        child: Text(
+                          "#$sno",
+                          style: const TextStyle(
+                            color: Color(0xFF1F3A5F),
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          retNo,
+                          style: const TextStyle(
+                            color: Color(0xFF1F3A5F),
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                          ),
+                        ),
+                        Text(
+                          date,
+                          style: TextStyle(
+                            color: Colors.blueGrey.withValues(alpha: 0.5),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      "₹$netTotal",
+                      style: const TextStyle(
+                        color: Colors.redAccent,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 18,
+                      ),
+                    ),
+                    if (paymentMode.isNotEmpty) _buildPaymentBadge(paymentMode),
+                  ],
+                ),
+              ],
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Divider(height: 1),
+            ),
+            Row(
+              children: [
+                Icon(
+                  Icons.person_outline,
+                  size: 16,
+                  color: Colors.grey[400],
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    party,
+                    style: TextStyle(
+                      color: Colors.grey[700],
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _tableCell({required double width, required Widget content}) {
+  Widget _buildPaymentBadge(String mode) {
+    Color color;
+    switch (mode) {
+      case "CASH":
+        color = Colors.green;
+        break;
+      case "CARD":
+        color = Colors.blue;
+        break;
+      case "CREDIT":
+        color = Colors.orange;
+        break;
+      default:
+        color = Colors.grey;
+    }
+
     return Container(
-      width: width,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: content,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.3), width: 0.5),
+      ),
+      child: Text(
+        mode,
+        style: TextStyle(
+          color: color,
+          fontSize: 9,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.5,
+        ),
+      ),
     );
   }
 
-  TextStyle _headerStyle() => const TextStyle(
-    color: Colors.white,
-    fontWeight: FontWeight.w900,
-    fontSize: 13,
-    letterSpacing: 0.5,
-  );
-
-  TextStyle _rowStyle({Color color = const Color(0xFF374151)}) =>
-      TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 13);
 
   Widget _buildBottomSummaryBar() {
     return Container(

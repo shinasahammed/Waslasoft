@@ -19,7 +19,8 @@ class SalesReturnSummaryScreen extends StatefulWidget {
   });
 
   @override
-  State<SalesReturnSummaryScreen> createState() => _SalesReturnSummaryScreenState();
+  State<SalesReturnSummaryScreen> createState() =>
+      _SalesReturnSummaryScreenState();
 }
 
 class _SalesReturnSummaryScreenState extends State<SalesReturnSummaryScreen> {
@@ -49,7 +50,7 @@ class _SalesReturnSummaryScreenState extends State<SalesReturnSummaryScreen> {
     double total = 0;
     _cartQuantities.forEach((itemId, qty) {
       // Assuming 0 tax for returns as per sales_return_screen logic
-      total += 0 * qty; 
+      total += 0 * qty;
     });
     return total;
   }
@@ -73,8 +74,18 @@ class _SalesReturnSummaryScreenState extends State<SalesReturnSummaryScreen> {
     final grandTotal = _totalAmount + _totalVat;
     final now = DateTime.now();
     final months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     final orderDate = "${now.day} ${months[now.month - 1]} ${now.year}";
     final orderIdStr = "#WSL-SRET-${now.millisecondsSinceEpoch % 10000}";
@@ -86,12 +97,16 @@ class _SalesReturnSummaryScreenState extends State<SalesReturnSummaryScreen> {
       invoiceAmount: _totalAmount.toStringAsFixed(2),
       name: widget.selectedParty?.name ?? "Cash Customer",
       // Mapping return items to sale items for storage consistency
-      saleItems: widget.items.map((e) => sales_model.SaleItem(
-        id: e.id,
-        product: e.product,
-        price: e.returnAmount,
-        qty: _cartQuantities[e.id]?.toString(),
-      )).toList(),
+      saleItems: widget.items
+          .map(
+            (e) => sales_model.SaleItem(
+              id: e.id,
+              product: e.product,
+              price: e.returnAmount,
+              qty: _cartQuantities[e.id]?.toString(),
+            ),
+          )
+          .toList(),
     );
 
     await TransactionStorage.saveSalesReturnTransaction(transaction);
@@ -218,9 +233,8 @@ class _SalesReturnSummaryScreenState extends State<SalesReturnSummaryScreen> {
         elevation: 0,
         leading: BackButton(
           color: Colors.white,
-          onPressed: () => Navigator.pop(context, {
-            'quantities': _cartQuantities,
-          }),
+          onPressed: () =>
+              Navigator.pop(context, {'quantities': _cartQuantities}),
         ),
       ),
       body: Column(
@@ -246,7 +260,9 @@ class _SalesReturnSummaryScreenState extends State<SalesReturnSummaryScreen> {
                   ),
                   child: Center(
                     child: Text(
-                      widget.selectedParty != null && widget.selectedParty!.name != null && widget.selectedParty!.name!.isNotEmpty
+                      widget.selectedParty != null &&
+                              widget.selectedParty!.name != null &&
+                              widget.selectedParty!.name!.isNotEmpty
                           ? widget.selectedParty!.name![0].toUpperCase()
                           : "?",
                       style: const TextStyle(
@@ -317,7 +333,8 @@ class _SalesReturnSummaryScreenState extends State<SalesReturnSummaryScreen> {
                       final item = widget.items.firstWhere(
                         (e) => e.id == itemId,
                       );
-                      final price = double.tryParse(item.returnAmount ?? '0') ?? 0;
+                      final price =
+                          double.tryParse(item.returnAmount ?? '0') ?? 0;
 
                       return Container(
                         margin: const EdgeInsets.only(bottom: 12),
