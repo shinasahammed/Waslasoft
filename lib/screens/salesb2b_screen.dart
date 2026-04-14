@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:waslasoft/models/sales_data_model.dart';
 import 'package:waslasoft/services/sales_data_service.dart';
+import 'package:waslasoft/models/expense_data_model.dart';
+import 'package:waslasoft/services/expense_data_service.dart';
+import 'package:waslasoft/screens/sales_summary_screen.dart';
+import 'package:waslasoft/widgets/customer_party_dialog.dart';
 import '../services/app_config.dart';
 import '../widgets/select_party_dialog.dart';
 import '../storage/sales_storage.dart';
 import 'package:custom_refresh_indicator/custom_refresh_indicator.dart';
+import 'package:waslasoft/widgets/discount_dialog.dart';
 
 class Salesscreen extends StatefulWidget {
   const Salesscreen({super.key});
@@ -21,9 +26,10 @@ class _SalesscreenState extends State<Salesscreen> {
   List<SaleItem> tasKitem = [];
   bool isLoading = false;
   String _selectedCategory = "All";
-  String _selectedParty = "Select Party";
+  Expensedatamodel? _selectedParty;
   bool _isSearchVisible = false;
   final Map<int, int> _cartQuantities = {};
+  final Map<int, bool> _cartUnits = {};
 
   double get _totalAmount {
     double total = 0;
@@ -65,9 +71,21 @@ class _SalesscreenState extends State<Salesscreen> {
     setState(() {
       if (newQuantity <= 0) {
         _cartQuantities.remove(id);
+        _cartUnits.remove(id);
       } else {
         _cartQuantities[id] = newQuantity;
+        if (!_cartUnits.containsKey(id)) {
+          _cartUnits[id] = true; // Default to PCS
+        }
       }
+    });
+  }
+
+  void _updateUnit(SaleItem item, bool isPcs) {
+    final id = item.itemId ?? item.id;
+    if (id == null) return;
+    setState(() {
+      _cartUnits[id] = isPcs;
     });
   }
 
@@ -211,9 +229,12 @@ class _SalesscreenState extends State<Salesscreen> {
                         children: [
                           GestureDetector(
                             onTap: () async {
-                              final result = await showDialog<String>(
+                              final result = await showDialog<Expensedatamodel>(
                                 context: context,
-                                builder: (context) => const SelectPartyDialog(),
+                                builder: (context) => SelectcustomerPartyDialog(
+                                  onRefresh: () =>
+                                      ExpenseDataService().fetchData(),
+                                ),
                               );
                               if (result != null) {
                                 setState(() {
@@ -226,16 +247,16 @@ class _SalesscreenState extends State<Salesscreen> {
                               width: 110,
                               margin: const EdgeInsets.only(left: 45),
                               decoration: BoxDecoration(
-                                color: Colors.white,
+                                color: Colors.white.withOpacity(0.9),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Center(
                                 child: Text(
-                                  _selectedParty,
+                                  _selectedParty?.name ?? "Select Party",
                                   style: const TextStyle(
                                     color: Colors.black,
                                     fontSize: 13,
-                                    fontWeight: FontWeight.w500,
+                                    fontWeight: FontWeight.w700,
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -529,9 +550,9 @@ class _SalesscreenState extends State<Salesscreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  _selectedParty == "Select Party"
+                                  _selectedParty == null
                                       ? "Customer Not Selected"
-                                      : _selectedParty,
+                                      : (_selectedParty?.name ?? "Unknown"),
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 16,
@@ -539,7 +560,7 @@ class _SalesscreenState extends State<Salesscreen> {
                                   ),
                                 ),
                                 Text(
-                                  _selectedParty == "Select Party"
+                                  _selectedParty == null
                                       ? "Select a party to start billing"
                                       : "Active Customer",
                                   style: const TextStyle(
@@ -627,8 +648,11 @@ class _SalesscreenState extends State<Salesscreen> {
                             taxAmount: item.taxAmount ?? "0",
                             initialQuantity:
                                 _cartQuantities[item.itemId ?? item.id] ?? 0,
+                            initialIsPcs:
+                                _cartUnits[item.itemId ?? item.id] ?? true,
                             onQuantityChanged: (newQty) =>
                                 _updateQuantity(item, newQty),
+                            onUnitChanged: (isPcs) => _updateUnit(item, isPcs),
                           );
                         },
                       ),
@@ -729,7 +753,57 @@ class _SalesscreenState extends State<Salesscreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               ElevatedButton(
-                onPressed: () {},
+                onPressed: () async {
+                  if (_selectedParty == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("Please select a customer first"),
+                        backgroundColor: Color(0xFF1F3A5F),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                    return;
+                  }
+                  if (_cartQuantities.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("Cart is empty"),
+                        backgroundColor: Color(0xFF1F3A5F),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                    return;
+                  }
+
+                  // Find items currently in cart
+                  final cartItems = tasKitem.where((item) {
+                    final id = item.itemId ?? item.id;
+                    return _cartQuantities.containsKey(id);
+                  }).toList();
+
+                  final discountResult = await showDialog<double>(
+                    context: context,
+                    builder: (context) => DiscountDialog(
+                      maxAmount: _totalAmount + _totalVat,
+                    ),
+                  );
+
+                  if (discountResult != null) {
+                    // Navigate to Summary Screen
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => SalesSummaryScreen(
+                          items: cartItems,
+                          initialQuantities: _cartQuantities,
+                          initialUnits: _cartUnits,
+                          selectedParty: _selectedParty,
+                          discountAmount: discountResult,
+                        ),
+                      ),
+                    );
+                  }
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFFFB74D),
                   foregroundColor: Colors.black87,
@@ -753,7 +827,8 @@ class _SalesscreenState extends State<Salesscreen> {
                 onTap: () {
                   setState(() {
                     _cartQuantities.clear();
-                    _selectedParty = "Select Party";
+                    _cartUnits.clear();
+                    _selectedParty = null;
                   });
                   showMessage("Cart cleared");
                 },
@@ -796,7 +871,9 @@ class ProductCardWidget extends StatefulWidget {
   final String taxPercentage;
   final String taxAmount;
   final int initialQuantity;
+  final bool initialIsPcs;
   final Function(int) onQuantityChanged;
+  final Function(bool) onUnitChanged;
 
   const ProductCardWidget({
     super.key,
@@ -806,7 +883,9 @@ class ProductCardWidget extends StatefulWidget {
     required this.taxPercentage,
     required this.taxAmount,
     required this.initialQuantity,
+    required this.initialIsPcs,
     required this.onQuantityChanged,
+    required this.onUnitChanged,
   });
 
   @override
@@ -817,9 +896,7 @@ class _ProductCardWidgetState extends State<ProductCardWidget> {
   bool isPcs = true;
 
   void _toggleUnit() {
-    setState(() {
-      isPcs = !isPcs;
-    });
+    widget.onUnitChanged(!widget.initialIsPcs);
   }
 
   void _increment() {
@@ -959,10 +1036,10 @@ class _ProductCardWidgetState extends State<ProductCardWidget> {
                                     "pcs",
                                     style: TextStyle(
                                       fontSize: 10,
-                                      fontWeight: isPcs
+                                      fontWeight: widget.initialIsPcs
                                           ? FontWeight.bold
                                           : FontWeight.normal,
-                                      color: isPcs
+                                      color: widget.initialIsPcs
                                           ? const Color(0xFF1F3A5F)
                                           : Colors.grey[600],
                                     ),
@@ -978,10 +1055,10 @@ class _ProductCardWidgetState extends State<ProductCardWidget> {
                                     "kg",
                                     style: TextStyle(
                                       fontSize: 10,
-                                      fontWeight: !isPcs
+                                      fontWeight: !widget.initialIsPcs
                                           ? FontWeight.bold
                                           : FontWeight.normal,
-                                      color: !isPcs
+                                      color: !widget.initialIsPcs
                                           ? const Color(0xFF1F3A5F)
                                           : Colors.grey[600],
                                     ),

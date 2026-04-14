@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:waslasoft/models/sales_data_model.dart';
+import 'package:waslasoft/models/expense_data_model.dart';
+import 'package:waslasoft/widgets/customer_party_dialog.dart';
 import 'package:waslasoft/widgets/select_party_dialog.dart';
+import 'package:waslasoft/storage/transaction_storage.dart';
+import 'package:waslasoft/services/expense_data_service.dart';
 
 class SalesReportScreen extends StatefulWidget {
   const SalesReportScreen({super.key});
@@ -15,15 +19,55 @@ class _SalesReportScreenState extends State<SalesReportScreen> {
     1.0,
   );
   final ScrollController _scrollController = ScrollController();
-List<SaleItem> taskItems = [];
+  List<SaleItem> taskItems = [];
   DateTime _fromDate = DateTime(2026, 3, 12);
   DateTime _toDate = DateTime(2026, 3, 12);
-  String _selectedParty = "SELECT PARTY";
+  Expensedatamodel? _selectedParty;
+
+  List<Datum> _transactions = [];
+  bool _isLoading = true;
+  double _totalNetAmount = 0.0;
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    _loadTransactions();
+  }
+
+  Future<void> _loadTransactions() async {
+    setState(() => _isLoading = true);
+    final transactions = await TransactionStorage.getSalesTransactions();
+
+    // Filter logic can be applied here based on _fromDate, _toDate, _selectedParty.
+    // For now, load all local cache then filter by party if selected.
+    List<Datum> filteredTransactions = transactions;
+    if (_selectedParty != null) {
+      filteredTransactions = transactions
+          .where((tx) => tx.name == _selectedParty!.name)
+          .toList();
+    }
+
+    double total = 0.0;
+    for (var tx in filteredTransactions) {
+      total += double.tryParse(tx.grandTotal ?? '0') ?? 0.0;
+    }
+
+    setState(() {
+      _transactions = filteredTransactions;
+      _totalNetAmount = total;
+      _isLoading = false;
+    });
+  }
+
+  String _getInitials(String name) {
+    List<String> words = name.trim().split(" ");
+    if (words.length >= 2) {
+      return (words[0][0] + words[1][0]).toUpperCase();
+    } else if (words.isNotEmpty && words[0].isNotEmpty) {
+      return words[0][0].toUpperCase();
+    }
+    return "?";
   }
 
   void _onScroll() {
@@ -139,14 +183,18 @@ List<SaleItem> taskItems = [];
                         children: [
                           GestureDetector(
                             onTap: () async {
-                              final result = await showDialog<String>(
+                              final result = await showDialog<Expensedatamodel>(
                                 context: context,
-                                builder: (context) => const SelectPartyDialog(),
+                                builder: (context) => SelectcustomerPartyDialog(
+                                  onRefresh: () =>
+                                      ExpenseDataService().fetchData(),
+                                ),
                               );
                               if (result != null) {
                                 setState(() {
                                   _selectedParty = result;
                                 });
+                                _loadTransactions();
                               }
                             },
                             child: Container(
@@ -162,7 +210,7 @@ List<SaleItem> taskItems = [];
                               ),
                               child: Center(
                                 child: Text(
-                                  _selectedParty,
+                                  _selectedParty?.name ?? "SELECT PARTY",
                                   style: const TextStyle(
                                     color: Color(0xFF1F3A5F),
                                     fontSize: 13,
@@ -178,6 +226,7 @@ List<SaleItem> taskItems = [];
                             onTap: () {
                               setState(() {
                                 // Reload logic
+                                _loadTransactions();
                               });
                             },
                             child: Container(
@@ -284,10 +333,15 @@ List<SaleItem> taskItems = [];
                             ).withValues(alpha: 0.1),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(
-                            Icons.person,
-                            color: Color(0xFF1F3A5F),
-                            size: 24,
+                          child: Center(
+                            child: Text(
+                              _getInitials(_selectedParty?.name ?? "?"),
+                              style: const TextStyle(
+                                color: Color(0xFF1F3A5F),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 15),
@@ -296,9 +350,9 @@ List<SaleItem> taskItems = [];
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                _selectedParty == "Select Party"
+                                _selectedParty == null
                                     ? "Customer Not Selected"
-                                    : _selectedParty,
+                                    : _selectedParty!.name!,
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
@@ -306,7 +360,7 @@ List<SaleItem> taskItems = [];
                                 ),
                               ),
                               Text(
-                                _selectedParty == "Select Party"
+                                _selectedParty == null
                                     ? "Select a party to start billing"
                                     : "Active Customer",
                                 style: const TextStyle(
@@ -331,7 +385,7 @@ List<SaleItem> taskItems = [];
                         _buildMiniInfo(Icons.phone, "No Phone"),
                         _buildMiniInfo(
                           Icons.account_balance_wallet,
-                          "Bal: 0.00",
+                          "Bal: ${_selectedParty?.openBalance ?? "0.00"}",
                         ),
                         _buildMiniInfo(Icons.history, "Last: N/A"),
                       ],
@@ -387,37 +441,47 @@ List<SaleItem> taskItems = [];
                             children: [
                               _buildListHeader(),
                               const Divider(height: 1),
-                              ListView(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                padding: EdgeInsets.zero,
-                                children: [
-                                  _buildActivityCard(
-                                    sno: "1",
-                                    billNo: "INV-101",
-                                    date: "12-3-2026",
-                                    party: "Cash Customer",
-                                    netTotal: "4,500.00",
-                                    isLast: false,
-                                  ),
-                                  _buildActivityCard(
-                                    sno: "2",
-                                    billNo: "INV-102",
-                                    date: "12-3-2026",
-                                    party: "ABC Enterprises",
-                                    netTotal: "2,000.00",
-                                    isLast: false,
-                                  ),
-                                  _buildActivityCard(
-                                    sno: "3",
-                                    billNo: "INV-103",
-                                    date: "12-3-2026",
-                                    party: "XYZ Ltd (Very Long Name)",
-                                    netTotal: "1,250.00",
-                                    isLast: true,
-                                  ),
-                                ],
-                              ),
+                              _isLoading
+                                  ? const Padding(
+                                      padding: EdgeInsets.all(40.0),
+                                      child: Center(
+                                        child: CircularProgressIndicator(),
+                                      ),
+                                    )
+                                  : _transactions.isEmpty
+                                  ? const Padding(
+                                      padding: EdgeInsets.all(40.0),
+                                      child: Center(
+                                        child: Text("No transactions found"),
+                                      ),
+                                    )
+                                  : ListView.builder(
+                                      shrinkWrap: true,
+                                      physics:
+                                          const NeverScrollableScrollPhysics(),
+                                      padding: EdgeInsets.zero,
+                                      itemCount: _transactions.length,
+                                      itemBuilder: (context, index) {
+                                        final tx = _transactions[index];
+                                        final isLast =
+                                            index == _transactions.length - 1;
+
+                                        String displayDate = "Unknown";
+                                        if (tx.saleDate != null) {
+                                          displayDate =
+                                              "${tx.saleDate!.day}-${tx.saleDate!.month}-${tx.saleDate!.year}";
+                                        }
+
+                                        return _buildActivityCard(
+                                          sno: "${index + 1}",
+                                          billNo: tx.orderNo ?? "N/A",
+                                          date: displayDate,
+                                          party: tx.name ?? "Cash Customer",
+                                          netTotal: tx.grandTotal ?? "0.00",
+                                          isLast: isLast,
+                                        );
+                                      },
+                                    ),
                             ],
                           ),
                         ),
@@ -458,7 +522,7 @@ List<SaleItem> taskItems = [];
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  "NET TOTAL: ₹7,750.00",
+                  "NET TOTAL: ₹${_totalNetAmount.toStringAsFixed(2)}",
                   style: TextStyle(
                     color: Colors.orange[300],
                     fontWeight: FontWeight.w900,

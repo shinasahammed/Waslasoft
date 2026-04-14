@@ -1,19 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:waslasoft/models/purchase_data_model.dart';
+import 'package:waslasoft/models/purchase_return_model.dart' as p_return;
+import 'package:waslasoft/models/purchase_return_model.dart' show PurchaseReturnItem;
 import 'package:waslasoft/models/expense_data_model.dart';
 import 'package:waslasoft/services/app_config.dart';
 import 'printoption_screen.dart';
 import '../services/session_service.dart';
-import '../storage/transaction_storage.dart';
-import '../models/purchase_data_model.dart' as purchase;
 
-class OrderSummaryScreen extends StatefulWidget {
-  final List<PurchaseItem> items;
+class PurchaseReturnSummaryScreen extends StatefulWidget {
+  final List<PurchaseReturnItem> items;
   final Map<int, int> initialQuantities;
   final Map<int, bool> initialUnits;
   final Expensedatamodel? selectedParty;
 
-  const OrderSummaryScreen({
+  const PurchaseReturnSummaryScreen({
     super.key,
     required this.items,
     required this.initialQuantities,
@@ -22,10 +21,10 @@ class OrderSummaryScreen extends StatefulWidget {
   });
 
   @override
-  State<OrderSummaryScreen> createState() => _OrderSummaryScreenState();
+  State<PurchaseReturnSummaryScreen> createState() => _PurchaseReturnSummaryScreenState();
 }
 
-class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
+class _PurchaseReturnSummaryScreenState extends State<PurchaseReturnSummaryScreen> {
   late Map<int, int> _cartQuantities;
   late Map<int, bool> _cartUnits;
 
@@ -41,33 +40,26 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
     _cartQuantities.forEach((itemId, qty) {
       try {
         final item = widget.items.firstWhere(
-          (element) => (element.itemId ?? element.id) == itemId,
+          (element) => element.id == itemId,
         );
-        total += (double.tryParse(item.price ?? '0') ?? 0) * qty;
-      } catch (e) {}
+        total += (double.tryParse(item.returnAmount ?? '0') ?? 0) * qty;
+      } catch (e) {
+        debugPrint("Item not found: $itemId");
+      }
     });
     return total;
   }
 
   double get _totalVat {
     if (!AppConfig.isTaxEnabled) return 0.0;
-    double total = 0;
-    _cartQuantities.forEach((itemId, qty) {
-      try {
-        final item = widget.items.firstWhere(
-          (element) => (element.itemId ?? element.id) == itemId,
-        );
-        total += (double.tryParse(item.taxAmount ?? '0') ?? 0) * qty;
-      } catch (e) {}
-    });
-    return total;
+    return 0.0; 
   }
 
   int get _totalItems =>
       _cartQuantities.values.fold(0, (sum, qty) => sum + qty);
 
-  void _updateQuantity(PurchaseItem item, int newQuantity) {
-    final id = item.itemId ?? item.id;
+  void _updateQuantity(PurchaseReturnItem item, int newQuantity) {
+    final id = item.id;
     if (id == null) return;
     setState(() {
       if (newQuantity <= 0) {
@@ -79,42 +71,45 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
     });
   }
 
-  void _updateUnit(PurchaseItem item, bool isPcs) {
-    final id = item.itemId ?? item.id;
+  void _updateUnit(PurchaseReturnItem item, bool isPcs) {
+    final id = item.id;
     if (id == null) return;
     setState(() {
       _cartUnits[id] = isPcs;
     });
   }
 
-  purchase.Datum _createPurchaseRecord() {
+  p_return.Datum _createReturnRecord() {
     final now = DateTime.now();
     final grandTotal = _totalAmount + _totalVat;
-    final orderIdStr = "#WSL-PUR-${now.millisecondsSinceEpoch % 10000}";
-
-    return purchase.Datum(
-      orderNo: orderIdStr,
-      purchaseDate: now,
+    // For returns, we don't have a specific order number field in some views, 
+    // but the Datum model has 'customer_bill_no' or we can repurpose 'reason' for identifying.
+    // Actually, 'buyer' or 'company_name' can be set.
+    
+    final returnId = "#WSL-PRET-${now.millisecondsSinceEpoch % 10000}";
+    
+    return p_return.Datum(
+      returnDate: now,
       entryDate: now,
-      supplier: widget.selectedParty?.name,
+      customerBillNo: returnId,
+      companyName: widget.selectedParty?.name,
       supplierId: widget.selectedParty?.expenseId?.toString(),
       grandTotal: grandTotal.toString(),
       invoiceAmount: grandTotal.toString(),
-      purchaseItems: _cartQuantities.keys.map((itemId) {
+      totalReturnAmount: grandTotal.toString(),
+      purchaseReturnItems: _cartQuantities.keys.map((itemId) {
         final item = widget.items.firstWhere(
-          (e) => (e.itemId ?? e.id) == itemId,
+          (e) => e.id == itemId,
         );
         final qty = _cartQuantities[itemId]!;
-        final price = double.tryParse(item.price ?? '0') ?? 0;
-        final tax = double.tryParse(item.taxAmount ?? '0') ?? 0;
+        final price = double.tryParse(item.returnAmount ?? '0') ?? 0;
 
-        return purchase.PurchaseItem(
+        return p_return.PurchaseReturnItem(
           itemId: itemId,
           product: item.product,
-          qty: qty.toString(),
-          price: item.price,
-          taxAmount: (tax * qty).toString(),
-          subtotal: (price * qty).toString(),
+          returnQty: qty.toString(),
+          returnAmount: item.returnAmount,
+          createdAt: now,
         );
       }).toList(),
     );
@@ -144,7 +139,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
               ),
               const SizedBox(height: 24),
               const Text(
-                "Purchase Successful",
+                "Return Successful",
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -153,7 +148,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
               ),
               const SizedBox(height: 12),
               const Text(
-                "Do you want to print a bill for this transaction?",
+                "Do you want to print a receipt for this return?",
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey, fontSize: 14),
               ),
@@ -163,30 +158,27 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                   Expanded(
                     child: OutlinedButton(
                       onPressed: () {
-                        // Create purchase record
-                        final purchaseRecord = _createPurchaseRecord();
+                        final returnRecord = _createReturnRecord();
 
                         // Store transaction details for automatic pre-filling in the Payment screen
                         SessionService.setPendingPayment(
                           widget.selectedParty,
                           _totalAmount + _totalVat,
-                          purchaseRecord: purchaseRecord,
+                          isReturn: true,
+                          purchaseReturnRecord: returnRecord,
                         );
 
-                        if (!mounted) return;
                         Navigator.pop(context);
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text(
-                              "Purchase confirmed. Please complete payment to add to report.",
+                              "Return confirmed. Complete payment/receipt to add to report.",
                             ),
                             behavior: SnackBarBehavior.floating,
                             backgroundColor: Color(0xFF1F3A5F),
                           ),
                         );
-                        Navigator.of(
-                          context,
-                        ).popUntil((route) => route.isFirst);
+                        Navigator.of(context).popUntil((route) => route.isFirst);
                       },
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
@@ -201,38 +193,24 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () {
-                        // Create purchase record
-                        final purchaseRecord = _createPurchaseRecord();
+                        final returnRecord = _createReturnRecord();
 
-                        // Pass to session
                         SessionService.setPendingPayment(
                           widget.selectedParty,
                           _totalAmount + _totalVat,
-                          purchaseRecord: purchaseRecord,
+                          isReturn: true,
+                          purchaseReturnRecord: returnRecord,
                         );
 
                         final grandTotal = _totalAmount + _totalVat;
                         final now = DateTime.now();
                         final months = [
-                          'Jan',
-                          'Feb',
-                          'Mar',
-                          'Apr',
-                          'May',
-                          'Jun',
-                          'Jul',
-                          'Aug',
-                          'Sep',
-                          'Oct',
-                          'Nov',
-                          'Dec',
+                          'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
                         ];
-                        final orderDate =
-                            "${now.day} ${months[now.month - 1]} ${now.year}";
-                        final orderId =
-                            "#WSL-PUR-${now.millisecondsSinceEpoch % 10000}";
+                        final orderDate = "${now.day} ${months[now.month - 1]} ${now.year}";
+                        final orderId = "#WSL-PRET-${now.millisecondsSinceEpoch % 10000}";
 
-                        if (!mounted) return;
                         Navigator.pop(context);
                         Navigator.push(
                           context,
@@ -242,6 +220,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                               orderDate: orderDate,
                               totalAmount: grandTotal,
                               selectedParty: widget.selectedParty,
+                              isReturn: true,
                             ),
                           ),
                         );
@@ -278,7 +257,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
         title: const Text(
-          "Order Summary",
+          "Purchase Return Summary",
           style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
         ),
         backgroundColor: const Color(0xFF1F3A5F),
@@ -293,7 +272,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
       ),
       body: Column(
         children: [
-          // Vendor Info Section
+          // Vendor Header Section
           Container(
             padding: const EdgeInsets.all(20),
             decoration: const BoxDecoration(
@@ -339,7 +318,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                       Text(
                         widget.selectedParty?.openBalance != null
                             ? "Balance: ₹${widget.selectedParty!.openBalance}"
-                            : "New Transaction",
+                            : "New Return Order",
                         style: TextStyle(
                           color: Colors.white.withOpacity(0.7),
                           fontSize: 13,
@@ -364,10 +343,10 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                           color: Colors.grey[300],
                         ),
                         const SizedBox(height: 16),
-                        Text(
-                          "Your cart is empty",
+                        const Text(
+                          "Your return cart is empty",
                           style: TextStyle(
-                            color: Colors.grey[400],
+                            color: Colors.grey,
                             fontSize: 18,
                           ),
                         ),
@@ -382,9 +361,9 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                       final qty = _cartQuantities[itemId]!;
                       final isPcs = _cartUnits[itemId] ?? true;
                       final item = widget.items.firstWhere(
-                        (e) => (e.itemId ?? e.id) == itemId,
+                        (e) => e.id == itemId,
                       );
-                      final price = double.tryParse(item.price ?? '0') ?? 0;
+                      final price = double.tryParse(item.returnAmount ?? '0') ?? 0;
 
                       return Container(
                         margin: const EdgeInsets.only(bottom: 12),
@@ -415,7 +394,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    "₹${price.toStringAsFixed(2)}",
+                                    "₹${price.toStringAsFixed(2)} per ${isPcs ? 'PCS' : 'KG'}",
                                     style: TextStyle(
                                       color: Colors.grey[600],
                                       fontSize: 13,
@@ -531,7 +510,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      "Subtotal",
+                      "Return Subtotal",
                       style: TextStyle(color: Colors.grey[600], fontSize: 14),
                     ),
                     Text(
@@ -578,7 +557,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text(
-                      "Grand Total",
+                      "Estimated Credit",
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 18,
@@ -609,7 +588,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                     ),
                   ),
                   child: const Text(
-                    "CONFIRM PURCHASE",
+                    "SAVE & PRINT",
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                   ),
                 ),

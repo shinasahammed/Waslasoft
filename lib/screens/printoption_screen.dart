@@ -7,6 +7,8 @@ class PrintOptionScreen extends StatefulWidget {
   final String orderDate;
   final double totalAmount;
   final Expensedatamodel? selectedParty;
+  final bool isReturn;
+  final bool hidePaymentOption;
 
   const PrintOptionScreen({
     super.key,
@@ -14,6 +16,8 @@ class PrintOptionScreen extends StatefulWidget {
     this.orderDate = "11 Mar 2026",
     this.totalAmount = 2450.00,
     this.selectedParty,
+    this.isReturn = false,
+    this.hidePaymentOption = false,
   });
 
   @override
@@ -127,23 +131,25 @@ class _PrintOptionScreenState extends State<PrintOptionScreen> {
               crossAxisSpacing: 16,
               childAspectRatio: 1.1,
               children: [
-                _buildActionCard(
-                  icon: Icons.payments_rounded,
-                  label: "PAYMENT",
-                  sublabel: "History/Gateway",
-                  color: _accentPurple,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => PaymentsignScreen(
-                          initialParty: widget.selectedParty,
-                          initialAmount: widget.totalAmount,
+                if (!widget.hidePaymentOption)
+                  _buildActionCard(
+                    icon: Icons.payments_rounded,
+                    label: "PAYMENT",
+                    sublabel: "History/Gateway",
+                    color: _accentPurple,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => PaymentsignScreen(
+                            initialParty: widget.selectedParty,
+                            initialAmount: widget.totalAmount,
+                            isReturn: widget.isReturn,
+                          ),
                         ),
-                      ),
-                    );
-                  },
-                ),
+                      );
+                    },
+                  ),
                 _buildActionCard(
                   icon: Icons.bluetooth_rounded,
                   label: "BLUETOOTH",

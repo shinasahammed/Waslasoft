@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../storage/transaction_storage.dart';
+import '../../models/purchase_data_model.dart' as purchase;
+import 'package:intl/intl.dart';
 
 class PurchaseReportScreen extends StatefulWidget {
   const PurchaseReportScreen({super.key});
@@ -13,13 +16,49 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
   );
   final ScrollController _scrollController = ScrollController();
 
-  DateTime _fromDate = DateTime(2026, 3, 12);
-  DateTime _toDate = DateTime(2026, 3, 12);
+  DateTime _fromDate = DateTime.now();
+  DateTime _toDate = DateTime.now();
+
+  List<purchase.Datum> _allTransactions = [];
+  List<purchase.Datum> _filteredTransactions = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    _loadTransactions();
+  }
+
+  Future<void> _loadTransactions() async {
+    setState(() => _isLoading = true);
+    final transactions = await TransactionStorage.getPurchaseTransactions();
+    setState(() {
+      _allTransactions = transactions;
+      _isLoading = false;
+      _applyFilters();
+    });
+  }
+
+  void _applyFilters() {
+    setState(() {
+      _filteredTransactions = _allTransactions.where((t) {
+        if (t.purchaseDate == null) return false;
+        
+        // Normalize dates to midnight for comparison
+        final purchaseDate = DateTime(
+          t.purchaseDate!.year,
+          t.purchaseDate!.month,
+          t.purchaseDate!.day,
+        );
+        final from = DateTime(_fromDate.year, _fromDate.month, _fromDate.day);
+        final to = DateTime(_toDate.year, _toDate.month, _toDate.day);
+        
+        return purchaseDate.isAtSameMomentAs(from) ||
+               purchaseDate.isAtSameMomentAs(to) ||
+               (purchaseDate.isAfter(from) && purchaseDate.isBefore(to));
+      }).toList();
+    });
   }
 
   void _onScroll() {
@@ -65,7 +104,14 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
           _toDate = picked;
         }
       });
+      _applyFilters();
     }
+  }
+
+  double get _totalNetAmount {
+    return _filteredTransactions.fold(0.0, (sum, t) {
+      return sum + (double.tryParse(t.grandTotal ?? '0') ?? 0.0);
+    });
   }
 
   @override
@@ -191,37 +237,67 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
                             children: [
                               _buildListHeader(),
                               const Divider(height: 1),
-                              ListView(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                padding: EdgeInsets.zero,
-                                children: [
-                                  _buildActivityCard(
-                                    sno: "1",
-                                    billNo: "PUR-101",
-                                    date: "12-3-2026",
-                                    party: "Cash Customer",
-                                    netTotal: "4,500.00",
-                                    isLast: false,
-                                  ),
-                                  _buildActivityCard(
-                                    sno: "2",
-                                    billNo: "PUR-102",
-                                    date: "12-3-2026",
-                                    party: "ABC Enterprises",
-                                    netTotal: "2,000.00",
-                                    isLast: false,
-                                  ),
-                                  _buildActivityCard(
-                                    sno: "3",
-                                    billNo: "PUR-103",
-                                    date: "12-3-2026",
-                                    party: "XYZ Ltd (Very Long Name)",
-                                    netTotal: "1,250.00",
-                                    isLast: true,
-                                  ),
-                                ],
-                              ),
+                              _isLoading
+                                  ? const Center(
+                                      child: Padding(
+                                        padding: EdgeInsets.all(40),
+                                        child: CircularProgressIndicator(
+                                          color: Color(0xFF1F3A5F),
+                                        ),
+                                      ),
+                                    )
+                                  : _filteredTransactions.isEmpty
+                                      ? Center(
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(40),
+                                            child: Column(
+                                              children: [
+                                                Icon(
+                                                  Icons.inbox_rounded,
+                                                  size: 60,
+                                                  color: Colors.grey[300],
+                                                ),
+                                                const SizedBox(height: 16),
+                                                Text(
+                                                  "No purchase activity found",
+                                                  style: TextStyle(
+                                                    color: Colors.grey[400],
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        )
+                                      : ListView.builder(
+                                          shrinkWrap: true,
+                                          physics:
+                                              const NeverScrollableScrollPhysics(),
+                                          padding: EdgeInsets.zero,
+                                          itemCount:
+                                              _filteredTransactions.length,
+                                          itemBuilder: (context, index) {
+                                            final t =
+                                                _filteredTransactions[index];
+                                            return _buildActivityCard(
+                                              sno: (index + 1).toString(),
+                                              billNo: t.orderNo ?? "N/A",
+                                              date: t.purchaseDate != null
+                                                  ? DateFormat('dd-MM-yyyy')
+                                                      .format(t.purchaseDate!)
+                                                  : "N/A",
+                                              party: t.supplier ?? "N/A",
+                                              netTotal: double.tryParse(
+                                                            t.grandTotal ?? '0',
+                                                          )
+                                                      ?.toStringAsFixed(2) ??
+                                                  "0.00",
+                                              isLast: index ==
+                                                  _filteredTransactions.length -
+                                                      1,
+                                            );
+                                          },
+                                        ),
                             ],
                           ),
                         ),
@@ -262,7 +338,7 @@ class _PurchaseReportScreenState extends State<PurchaseReportScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  "NET TOTAL: ₹7,750.00",
+                  "NET TOTAL: ₹${_totalNetAmount.toStringAsFixed(2)}",
                   style: TextStyle(
                     color: Colors.orange[300],
                     fontWeight: FontWeight.w900,

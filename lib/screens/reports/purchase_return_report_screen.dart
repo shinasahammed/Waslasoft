@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../../storage/transaction_storage.dart';
+import '../../models/purchase_return_model.dart' as p_return;
 
 class PurchaseReturnReportScreen extends StatefulWidget {
   const PurchaseReturnReportScreen({super.key});
@@ -15,13 +18,51 @@ class _PurchaseReturnReportScreenState
   );
   final ScrollController _scrollController = ScrollController();
 
-  DateTime _fromDate = DateTime(2026, 3, 12);
-  DateTime _toDate = DateTime(2026, 3, 12);
+  DateTime _fromDate = DateTime.now().subtract(const Duration(days: 7));
+  DateTime _toDate = DateTime.now();
+  List<p_return.Datum> _transactions = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    _loadTransactions();
+  }
+
+  Future<void> _loadTransactions() async {
+    setState(() => _isLoading = true);
+    try {
+      final all = await TransactionStorage.getPurchaseReturnTransactions();
+      setState(() {
+        _transactions = all;
+      });
+    } catch (e) {
+      debugPrint("Error loading purchase returns: $e");
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  List<p_return.Datum> get _filteredTransactions {
+    return _transactions.where((t) {
+      if (t.returnDate == null) return false;
+      final date = DateTime(
+        t.returnDate!.year,
+        t.returnDate!.month,
+        t.returnDate!.day,
+      );
+      final from = DateTime(_fromDate.year, _fromDate.month, _fromDate.day);
+      final to = DateTime(_toDate.year, _toDate.month, _toDate.day);
+      return (date.isAtSameMomentAs(from) || date.isAfter(from)) &&
+          (date.isAtSameMomentAs(to) || date.isBefore(to));
+    }).toList();
+  }
+
+  double get _netTotal {
+    return _filteredTransactions.fold(0.0, (sum, t) {
+      return sum + (double.tryParse(t.grandTotal ?? '0') ?? 0.0);
+    });
   }
 
   void _onScroll() {
@@ -72,6 +113,8 @@ class _PurchaseReturnReportScreenState
 
   @override
   Widget build(BuildContext context) {
+    final filtered = _filteredTransactions;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9), // Premium light slate
       extendBodyBehindAppBar: true,
@@ -139,103 +182,110 @@ class _PurchaseReturnReportScreenState
           },
         ),
       ),
-      body: SingleChildScrollView(
-        controller: _scrollController,
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.only(bottom: 20),
-        child: Column(
-          children: [
-            const SizedBox(height: 130),
-
-            // 1. Premium Control Card
-            _buildModernFilterCard(),
-
-            const SizedBox(height: 24),
-
-            // 3. Unified Activity Section
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              controller: _scrollController,
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.only(bottom: 20),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  const SizedBox(height: 130),
+
+                  // 1. Control Card
+                  _buildModernFilterCard(),
+
+                  const SizedBox(height: 24),
+
+                  // 3. Unified Activity Section
                   Padding(
-                    padding: const EdgeInsets.only(left: 4, bottom: 12),
-                    child: const Text(
-                      "PURCHASE ACTIVITY",
-                      style: TextStyle(
-                        color: Colors.blueGrey,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 12,
-                        letterSpacing: 1.5,
-                      ),
-                    ),
-                  ),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4, bottom: 12),
+                          child: const Text(
+                            "PURCHASE RETURNS",
+                            style: TextStyle(
+                              color: Colors.blueGrey,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
                         ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(24),
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: SizedBox(
-                          width: 780,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildListHeader(),
-                              const Divider(height: 1),
-                              ListView(
-                                shrinkWrap: true,
-                                physics: const NeverScrollableScrollPhysics(),
-                                padding: EdgeInsets.zero,
-                                children: [
-                                  _buildActivityCard(
-                                    sno: "1",
-                                    billNo: "PUR-101",
-                                    date: "12-3-2026",
-                                    party: "Cash Customer",
-                                    netTotal: "4,500.00",
-                                    isLast: false,
-                                  ),
-                                  _buildActivityCard(
-                                    sno: "2",
-                                    billNo: "PUR-102",
-                                    date: "12-3-2026",
-                                    party: "ABC Enterprises",
-                                    netTotal: "2,000.00",
-                                    isLast: false,
-                                  ),
-                                  _buildActivityCard(
-                                    sno: "3",
-                                    billNo: "PUR-103",
-                                    date: "12-3-2026",
-                                    party: "XYZ Ltd (Very Long Name)",
-                                    netTotal: "1,250.00",
-                                    isLast: true,
-                                  ),
-                                ],
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(24),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.05),
+                                blurRadius: 20,
+                                offset: const Offset(0, 10),
                               ),
                             ],
                           ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(24),
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: SizedBox(
+                                width: 780,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _buildListHeader(),
+                                    const Divider(height: 1),
+                                    if (filtered.isEmpty)
+                                      const Padding(
+                                        padding: EdgeInsets.all(40.0),
+                                        child: Center(
+                                          child: Text(
+                                            "No return transactions found for selected range",
+                                            style: TextStyle(
+                                              color: Colors.grey,
+                                            ),
+                                          ),
+                                        ),
+                                      )
+                                    else
+                                      ListView.builder(
+                                        shrinkWrap: true,
+                                        physics:
+                                            const NeverScrollableScrollPhysics(),
+                                        padding: EdgeInsets.zero,
+                                        itemCount: filtered.length,
+                                        itemBuilder: (context, index) {
+                                          final t = filtered[index];
+                                          return _buildActivityCard(
+                                            sno: (index + 1).toString(),
+                                            billNo: t.customerBillNo ?? "N/A",
+                                            date: t.returnDate != null
+                                                ? DateFormat(
+                                                    'dd-MM-yyyy',
+                                                  ).format(t.returnDate!)
+                                                : "N/A",
+                                            party: t.companyName ?? "Unknown",
+                                            netTotal: t.grandTotal ?? "0.00",
+                                            isLast:
+                                                index == filtered.length - 1,
+                                          );
+                                        },
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
       bottomNavigationBar: _buildBottomSummaryBar(),
     );
   }
@@ -264,7 +314,7 @@ class _PurchaseReturnReportScreenState
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  "NET TOTAL: ₹7,750.00",
+                  "NET TOTAL: SAR ${_netTotal.toStringAsFixed(2)}",
                   style: TextStyle(
                     color: Colors.orange[300],
                     fontWeight: FontWeight.w900,
@@ -278,30 +328,6 @@ class _PurchaseReturnReportScreenState
       ),
     );
   }
-
-  // Widget _buildNavStat(String label, String value, Color color) {
-  //   return Column(
-  //     crossAxisAlignment: CrossAxisAlignment.start,
-  //     children: [
-  //       Text(
-  //         label,
-  //         style: TextStyle(
-  //           color: color.withOpacity(0.6),
-  //           fontSize: 9,
-  //           fontWeight: FontWeight.bold,
-  //         ),
-  //       ),
-  //       Text(
-  //         value,
-  //         style: TextStyle(
-  //           color: color,
-  //           fontWeight: FontWeight.w900,
-  //           fontSize: 14,
-  //         ),
-  //       ),
-  //     ],
-  //   );
-  // }
 
   Widget _buildModernFilterCard() {
     return Container(
@@ -498,7 +524,7 @@ class _PurchaseReturnReportScreenState
                 _tableCell(
                   width: 150,
                   content: Text(
-                    "₹$netTotal",
+                    "SAR $netTotal",
                     textAlign: TextAlign.right,
                     style: const TextStyle(
                       color: Colors.teal,

@@ -8,15 +8,20 @@ import 'package:waslasoft/services/payment_service.dart';
 import 'package:waslasoft/services/expense_data_service.dart';
 import 'package:waslasoft/widgets/purchase_party_dialog.dart';
 import 'package:waslasoft/widgets/payment_method_dialog.dart';
+import '../storage/transaction_storage.dart';
+import '../services/session_service.dart';
+import '../models/purchase_data_model.dart' as purchase;
 
 class PaymentsignScreen extends StatefulWidget {
   final Expensedatamodel? initialParty;
   final double? initialAmount;
+  final bool isReturn;
 
   const PaymentsignScreen({
     super.key,
     this.initialParty,
     this.initialAmount,
+    this.isReturn = false,
   });
 
   @override
@@ -68,9 +73,21 @@ class _PaymentsignScreenState extends State<PaymentsignScreen> {
     // If the original balance is negative (e.g., -100), debiting a positive amount (e.g. 50)
     // should reduce the debt to -50. Therefore, we ADD the debit amount.
     // If positive, we subtract.
-    final calculatedBalance = originalBalance < 0
-        ? originalBalance + debitAmount
-        : originalBalance - debitAmount;
+    // For a normal Purchase Payment (widget.isReturn = false), paying money deducts the debt. 
+    // Logic matching ExpenseScreen: If balance is negative, adding positive debitAmount moves it towards 0. If positive, minus.
+    // For a Purchase Return Payment (widget.isReturn = true), we are receiving money back/crediting, so the debt INCREASES.
+    double calculatedBalance;
+    if (widget.isReturn) {
+      // Return: increase the debt/balance
+      calculatedBalance = originalBalance < 0
+          ? originalBalance - debitAmount
+          : originalBalance + debitAmount;
+    } else {
+      // Normal Payment: reduce the debt/balance
+      calculatedBalance = originalBalance < 0
+          ? originalBalance + debitAmount
+          : originalBalance - debitAmount;
+    }
 
     return calculatedBalance.toStringAsFixed(2);
   }
@@ -141,7 +158,7 @@ class _PaymentsignScreenState extends State<PaymentsignScreen> {
         final paymentModel = Paymentmodel(
           paymentDate: DateTime.now(),
           paidTo: _selectedParty!.name,
-          amount: _amountController.text,
+          amount: widget.isReturn ? "-${_amountController.text}" : _amountController.text,
           paymentMethod: paymentMethod,
           clientCode: "1999", // Hardcoded as per other services
         );
@@ -149,6 +166,22 @@ class _PaymentsignScreenState extends State<PaymentsignScreen> {
         final success = await PaymentService().postData(paymentModel);
 
         if (success && mounted) {
+          // FINALIZING PURCHASE RECORD IF PRESENT
+          if (SessionService.pendingPurchase != null) {
+            await TransactionStorage.savePurchaseTransaction(
+              SessionService.pendingPurchase!,
+            );
+            SessionService.pendingPurchase = null;
+          }
+
+          // FINALIZING PURCHASE RETURN RECORD IF PRESENT
+          if (widget.isReturn && SessionService.pendingPurchaseReturn != null) {
+            await TransactionStorage.savePurchaseReturnTransaction(
+              SessionService.pendingPurchaseReturn!,
+            );
+            SessionService.pendingPurchaseReturn = null;
+          }
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text("Payment Successful via $paymentMethod"),

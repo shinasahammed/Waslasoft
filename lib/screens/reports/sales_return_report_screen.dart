@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:waslasoft/models/expense_data_model.dart';
+import 'package:waslasoft/models/sales_data_model.dart';
+import 'package:waslasoft/widgets/customer_party_dialog.dart';
 import 'package:waslasoft/widgets/select_party_dialog.dart';
+import 'package:waslasoft/storage/transaction_storage.dart';
+import 'package:waslasoft/services/expense_data_service.dart';
 
 class SalesReturnReportScreen extends StatefulWidget {
   const SalesReturnReportScreen({super.key});
@@ -18,26 +23,50 @@ class _SalesReturnReportScreenState extends State<SalesReturnReportScreen> {
 
   DateTime _fromDate = DateTime(2026, 3, 16);
   DateTime _toDate = DateTime(2026, 3, 16);
-  String _selectedParty = "SELECT PARTY";
-  final List<Map<String, dynamic>> _returnItems = [
-    {
-      "retNo": "RET-001",
-      "date": "16-3-2026",
-      "party": "CASH SALES",
-      "netTotal": "550.00",
-    },
-    {
-      "retNo": "RET-002",
-      "date": "16-3-2026",
-      "party": "WALK-IN CUSTOMER",
-      "netTotal": "1200.00",
-    },
-  ];
+  Expensedatamodel? _selectedParty;
+  
+  List<Datum> _returnTransactions = [];
+  bool _isLoading = true;
+  double _totalNetAmount = 0.0;
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    _loadTransactions();
+  }
+
+  Future<void> _loadTransactions() async {
+    setState(() => _isLoading = true);
+    final transactions = await TransactionStorage.getSalesReturnTransactions();
+    
+    List<Datum> filteredTransactions = transactions;
+    if (_selectedParty != null) {
+      filteredTransactions = transactions
+          .where((tx) => tx.name == _selectedParty!.name)
+          .toList();
+    }
+
+    double total = 0.0;
+    for (var tx in filteredTransactions) {
+      total += double.tryParse(tx.grandTotal ?? '0') ?? 0.0;
+    }
+
+    setState(() {
+      _returnTransactions = filteredTransactions;
+      _totalNetAmount = total;
+      _isLoading = false;
+    });
+  }
+
+  String _getInitials(String name) {
+    List<String> words = name.trim().split(" ");
+    if (words.length >= 2) {
+      return (words[0][0] + words[1][0]).toUpperCase();
+    } else if (words.isNotEmpty && words[0].isNotEmpty) {
+      return words[0][0].toUpperCase();
+    }
+    return "?";
   }
 
   void _onScroll() {
@@ -144,14 +173,17 @@ class _SalesReturnReportScreenState extends State<SalesReturnReportScreen> {
                         children: [
                           GestureDetector(
                             onTap: () async {
-                              final result = await showDialog<String>(
+                              final result = await showDialog<Expensedatamodel>(
                                 context: context,
-                                builder: (context) => const SelectPartyDialog(),
+                                builder: (context) => SelectcustomerPartyDialog(
+                                  onRefresh: () => ExpenseDataService().fetchData(),
+                                ),
                               );
                               if (result != null) {
                                 setState(() {
                                   _selectedParty = result;
                                 });
+                                _loadTransactions();
                               }
                             },
                             child: Container(
@@ -167,7 +199,7 @@ class _SalesReturnReportScreenState extends State<SalesReturnReportScreen> {
                               ),
                               child: Center(
                                 child: Text(
-                                  _selectedParty,
+                                  _selectedParty?.name ?? "SELECT PARTY",
                                   style: const TextStyle(
                                     color: Color(0xFF1F3A5F),
                                     fontSize: 12,
@@ -346,24 +378,42 @@ class _SalesReturnReportScreenState extends State<SalesReturnReportScreen> {
                 children: [
                   _buildTableHeader(),
                   const Divider(height: 1),
-                  ListView.separated(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    padding: EdgeInsets.zero,
-                    itemCount: _returnItems.length,
-                    separatorBuilder: (context, index) =>
-                        const Divider(height: 1),
-                    itemBuilder: (context, index) {
-                      final item = _returnItems[index];
-                      return _buildTableRow(
-                        index: (index + 1).toString(),
-                        retNo: item['retNo'],
-                        date: item['date'],
-                        party: item['party'],
-                        netTotal: item['netTotal'],
-                      );
-                    },
-                  ),
+                  _isLoading
+                      ? const Padding(
+                          padding: EdgeInsets.all(40.0),
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      : _returnTransactions.isEmpty
+                          ? const Padding(
+                              padding: EdgeInsets.all(40.0),
+                              child: Center(
+                                child: Text("No returns found"),
+                              ),
+                            )
+                          : ListView.separated(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              padding: EdgeInsets.zero,
+                              itemCount: _returnTransactions.length,
+                              separatorBuilder: (context, index) =>
+                                  const Divider(height: 1),
+                              itemBuilder: (context, index) {
+                                final tx = _returnTransactions[index];
+                                
+                                String displayDate = "Unknown";
+                                if (tx.saleDate != null) {
+                                  displayDate = "${tx.saleDate!.day}-${tx.saleDate!.month}-${tx.saleDate!.year}";
+                                }
+
+                                return _buildTableRow(
+                                  index: (index + 1).toString(),
+                                  retNo: tx.orderNo ?? "N/A",
+                                  date: displayDate,
+                                  party: tx.name ?? "Cash Customer",
+                                  netTotal: tx.grandTotal ?? "0.00",
+                                );
+                              },
+                            ),
                 ],
               ),
             ),
@@ -480,7 +530,7 @@ class _SalesReturnReportScreenState extends State<SalesReturnReportScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  "NET TOTAL: ₹7,750.00",
+                  "NET TOTAL: ₹${_totalNetAmount.toStringAsFixed(2)}",
                   style: TextStyle(
                     color: Colors.orange[300],
                     fontWeight: FontWeight.w900,

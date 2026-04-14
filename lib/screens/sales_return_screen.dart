@@ -3,8 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:waslasoft/models/sales_return_model.dart';
 import 'package:waslasoft/services/sales_return_service.dart';
 import 'package:waslasoft/storage/sales_return_storage.dart';
+import 'package:waslasoft/models/expense_data_model.dart';
+import 'package:waslasoft/services/expense_data_service.dart';
+import 'package:waslasoft/widgets/customer_party_dialog.dart';
 import '../services/app_config.dart';
-import '../widgets/select_party_dialog.dart';
+
+import 'package:waslasoft/screens/sales_return_summary_screen.dart';
 
 class Salesreturnscreen extends StatefulWidget {
   const Salesreturnscreen({super.key});
@@ -22,7 +26,7 @@ class _SalesreturnscreenState extends State<Salesreturnscreen> {
 
   bool isLoading = false;
   String _selectedCategory = "All";
-  String _selectedParty = "Select Party";
+  Expensedatamodel? _selectedParty;
   bool _isSearchVisible = false;
   final Map<int, int> _cartQuantities = {};
 
@@ -210,9 +214,12 @@ class _SalesreturnscreenState extends State<Salesreturnscreen> {
                         children: [
                           GestureDetector(
                             onTap: () async {
-                              final result = await showDialog<String>(
+                              final result = await showDialog<Expensedatamodel>(
                                 context: context,
-                                builder: (context) => const SelectPartyDialog(),
+                                builder: (context) => SelectcustomerPartyDialog(
+                                  onRefresh: () =>
+                                      ExpenseDataService().fetchData(),
+                                ),
                               );
                               if (result != null) {
                                 setState(() {
@@ -230,7 +237,7 @@ class _SalesreturnscreenState extends State<Salesreturnscreen> {
                               ),
                               child: Center(
                                 child: Text(
-                                  _selectedParty,
+                                  _selectedParty?.name ?? "Select Party",
                                   style: const TextStyle(
                                     color: Colors.black,
                                     fontSize: 13,
@@ -529,9 +536,9 @@ class _SalesreturnscreenState extends State<Salesreturnscreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  _selectedParty == "Select Party"
+                                  _selectedParty == null
                                       ? "Customer Not Selected"
-                                      : _selectedParty,
+                                      : (_selectedParty?.name ?? "Unknown"),
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 16,
@@ -539,7 +546,7 @@ class _SalesreturnscreenState extends State<Salesreturnscreen> {
                                   ),
                                 ),
                                 Text(
-                                  _selectedParty == "Select Party"
+                                  _selectedParty == null
                                       ? "Select a party to start billing"
                                       : "Active Customer",
                                   style: const TextStyle(
@@ -729,7 +736,56 @@ class _SalesreturnscreenState extends State<Salesreturnscreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               ElevatedButton(
-                onPressed: () {},
+                onPressed: () async {
+                  if (_selectedParty == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          "Please select a customer before confirming return",
+                        ),
+                        backgroundColor: Color(0xFF1F3A5F),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                    return;
+                  }
+                  if (_cartQuantities.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          "Please add items to your return cart before confirming",
+                        ),
+                        backgroundColor: Color(0xFF1F3A5F),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                    return;
+                  }
+
+                  // Find items currently in cart
+                  final cartItems = tasKitem.where((item) {
+                    return _cartQuantities.containsKey(item.id);
+                  }).toList();
+
+                  // Navigate to Summary Screen
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => SalesReturnSummaryScreen(
+                        items: cartItems,
+                        initialQuantities: _cartQuantities,
+                        selectedParty: _selectedParty,
+                      ),
+                    ),
+                  );
+
+                  if (result != null && result is Map) {
+                    setState(() {
+                      _cartQuantities.clear();
+                      _cartQuantities.addAll(result['quantities']);
+                    });
+                  }
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFFFB74D),
                   foregroundColor: Colors.black87,
@@ -744,7 +800,7 @@ class _SalesreturnscreenState extends State<Salesreturnscreen> {
                   minimumSize: const Size(100, 45),
                 ),
                 child: const Text(
-                  "CONFIRM INVOICE",
+                  "CONFIRM RETURN",
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
               ),
@@ -753,7 +809,7 @@ class _SalesreturnscreenState extends State<Salesreturnscreen> {
                 onTap: () {
                   setState(() {
                     _cartQuantities.clear();
-                    _selectedParty = "Select Party";
+                    _selectedParty = null;
                   });
                   showMessage("Cart cleared");
                 },

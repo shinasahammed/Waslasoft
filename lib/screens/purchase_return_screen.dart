@@ -1,11 +1,14 @@
-import 'package:custom_refresh_indicator/custom_refresh_indicator.dart';
 import 'package:flutter/material.dart';
 import 'package:waslasoft/models/purchase_return_model.dart';
 import 'package:waslasoft/services/purchase_return_service.dart';
 import 'package:waslasoft/storage/purchase_return_storage.dart';
+import 'package:waslasoft/models/expense_data_model.dart';
 
+import 'package:waslasoft/screens/purchase_return_summary_screen.dart';
+import 'package:waslasoft/widgets/purchase_party_dialog.dart';
 import '../services/app_config.dart';
-import '../widgets/select_party_dialog.dart';
+
+import 'package:custom_refresh_indicator/custom_refresh_indicator.dart';
 
 class PurchaseReturnScreen extends StatefulWidget {
   const PurchaseReturnScreen({super.key});
@@ -22,9 +25,10 @@ class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
   List<PurchaseReturnItem> tasKitem = [];
   bool isLoading = false;
   String _selectedCategory = "All";
-  String _selectedParty = "Select Party";
+  Expensedatamodel? _selectedParty;
   bool _isSearchVisible = false;
   final Map<int, int> _cartQuantities = {};
+  final Map<int, bool> _cartUnits = {};
 
   double get _totalAmount {
     double total = 0;
@@ -64,9 +68,21 @@ class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
     setState(() {
       if (newQuantity <= 0) {
         _cartQuantities.remove(id);
+        _cartUnits.remove(id);
       } else {
         _cartQuantities[id] = newQuantity;
+        if (!_cartUnits.containsKey(id)) {
+          _cartUnits[id] = true; // Default to PCS
+        }
       }
+    });
+  }
+
+  void _updateUnit(PurchaseReturnItem item, bool isPcs) {
+    final id = item.id;
+    if (id == null) return;
+    setState(() {
+      _cartUnits[id] = isPcs;
     });
   }
 
@@ -210,9 +226,10 @@ class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
                         children: [
                           GestureDetector(
                             onTap: () async {
-                              final result = await showDialog<String>(
+                              final result = await showDialog<Expensedatamodel>(
                                 context: context,
-                                builder: (context) => const SelectPartyDialog(),
+                                builder: (context) =>
+                                    const SelectpurchasePartyDialog(),
                               );
                               if (result != null) {
                                 setState(() {
@@ -225,16 +242,16 @@ class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
                               width: 110,
                               margin: const EdgeInsets.only(left: 45),
                               decoration: BoxDecoration(
-                                color: Colors.white,
+                                color: Colors.white.withOpacity(0.9),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Center(
                                 child: Text(
-                                  _selectedParty,
+                                  _selectedParty?.name ?? "Select Party",
                                   style: const TextStyle(
                                     color: Colors.black,
                                     fontSize: 13,
-                                    fontWeight: FontWeight.w500,
+                                    fontWeight: FontWeight.w700,
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -529,9 +546,9 @@ class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  _selectedParty == "Select Party"
-                                      ? "Customer Not Selected"
-                                      : _selectedParty,
+                                  _selectedParty == null
+                                      ? "Vendor Not Selected"
+                                      : (_selectedParty?.name ?? "Unknown"),
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 16,
@@ -539,9 +556,9 @@ class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
                                   ),
                                 ),
                                 Text(
-                                  _selectedParty == "Select Party"
-                                      ? "Select a party to start billing"
-                                      : "Active Customer",
+                                  _selectedParty == null
+                                      ? "Select a vendor to start returns"
+                                      : "Active Vendor",
                                   style: const TextStyle(
                                     color: Colors.grey,
                                     fontSize: 12,
@@ -623,12 +640,13 @@ class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
                             name: item.product ?? "Unnamed Product",
                             price: "₹${item.returnAmount ?? '0'}",
                             stock: item.returnQty ?? "0",
-                            taxPercentage:
-                                "0", // Return items might not have tax per line in the same way
+                            taxPercentage: "0",
                             taxAmount: "0",
                             initialQuantity: _cartQuantities[item.id] ?? 0,
+                            initialIsPcs: _cartUnits[item.id] ?? true,
                             onQuantityChanged: (newQty) =>
                                 _updateQuantity(item, newQty),
+                            onUnitChanged: (isPcs) => _updateUnit(item, isPcs),
                           );
                         },
                       ),
@@ -729,7 +747,59 @@ class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               ElevatedButton(
-                onPressed: () {},
+                onPressed: () async {
+                  if (_selectedParty == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          "Please select a party before confirming purchase",
+                        ),
+                        backgroundColor: Color(0xFF1F3A5F),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                    return;
+                  }
+                  if (_cartQuantities.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          "Please add items to your cart before confirming",
+                        ),
+                        backgroundColor: Color(0xFF1F3A5F),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                    return;
+                  }
+
+                  // Find items currently in cart
+                  final cartItems = tasKitem.where((item) {
+                    return _cartQuantities.containsKey(item.id);
+                  }).toList();
+
+                  // Navigate to Summary Screen
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => PurchaseReturnSummaryScreen(
+                        items: cartItems,
+                        initialQuantities: _cartQuantities,
+                        initialUnits: _cartUnits,
+                        selectedParty: _selectedParty,
+                      ),
+                    ),
+                  );
+
+                  if (result != null && result is Map) {
+                    setState(() {
+                      _cartQuantities.clear();
+                      _cartQuantities.addAll(result['quantities']);
+                      _cartUnits.clear();
+                      _cartUnits.addAll(result['units']);
+                    });
+                  }
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFFFB74D),
                   foregroundColor: Colors.black87,
@@ -744,7 +814,7 @@ class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
                   minimumSize: const Size(100, 45),
                 ),
                 child: const Text(
-                  "CONFIRM INVOICE",
+                  "CONFIRM RETURN",
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
               ),
@@ -753,7 +823,8 @@ class _PurchaseReturnScreenState extends State<PurchaseReturnScreen> {
                 onTap: () {
                   setState(() {
                     _cartQuantities.clear();
-                    _selectedParty = "Select Party";
+                    _cartUnits.clear();
+                    _selectedParty = null;
                   });
                   showMessage("Cart cleared");
                 },
@@ -796,7 +867,9 @@ class ProductCardWidget extends StatefulWidget {
   final String taxPercentage;
   final String taxAmount;
   final int initialQuantity;
+  final bool initialIsPcs;
   final Function(int) onQuantityChanged;
+  final Function(bool) onUnitChanged;
 
   const ProductCardWidget({
     super.key,
@@ -806,7 +879,9 @@ class ProductCardWidget extends StatefulWidget {
     required this.taxPercentage,
     required this.taxAmount,
     required this.initialQuantity,
+    required this.initialIsPcs,
     required this.onQuantityChanged,
+    required this.onUnitChanged,
   });
 
   @override
@@ -817,9 +892,7 @@ class _ProductCardWidgetState extends State<ProductCardWidget> {
   bool isPcs = true;
 
   void _toggleUnit() {
-    setState(() {
-      isPcs = !isPcs;
-    });
+    widget.onUnitChanged(!widget.initialIsPcs);
   }
 
   void _increment() {
@@ -958,10 +1031,10 @@ class _ProductCardWidgetState extends State<ProductCardWidget> {
                                     "pcs",
                                     style: TextStyle(
                                       fontSize: 10,
-                                      fontWeight: isPcs
+                                      fontWeight: widget.initialIsPcs
                                           ? FontWeight.bold
                                           : FontWeight.normal,
-                                      color: isPcs
+                                      color: widget.initialIsPcs
                                           ? const Color(0xFF1F3A5F)
                                           : Colors.grey[600],
                                     ),
@@ -977,10 +1050,10 @@ class _ProductCardWidgetState extends State<ProductCardWidget> {
                                     "kg",
                                     style: TextStyle(
                                       fontSize: 10,
-                                      fontWeight: !isPcs
+                                      fontWeight: !widget.initialIsPcs
                                           ? FontWeight.bold
                                           : FontWeight.normal,
-                                      color: !isPcs
+                                      color: !widget.initialIsPcs
                                           ? const Color(0xFF1F3A5F)
                                           : Colors.grey[600],
                                     ),
